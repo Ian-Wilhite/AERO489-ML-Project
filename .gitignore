@@ -1,0 +1,15 @@
+
+
+# barrets mega zip
+*.zip
+./zips/*
+
+# venv bc ml versions get messy with tf and polars
+.venv/*
+
+# oh my god that zip drops so much data
+./training_data/*
+
+# yeah I vibecode, I know man
+.claude
+
