@@ -1,0 +1,22 @@
+(.venv) ianw@ianw-ubuntoo:~/Github/Courses/AERO489-Proj$ /home/ianw/Github/Courses/AERO489-Proj/.venv/bin/python /home/ianw/Github/Courses/AERO489-Proj/feature_engineering.py
+Found 491 simulation files
+
+Scalar features  → features/features_scalar.parquet
+  Shape : (476, 36)
+  g_limit range: 0.046 – 1.679 g
+shape: (5, 6)
+┌────────┬─────────┬──────────┬───────────────────────────┬──────────────────┬──────────────────────────┐
+│ sim_id ┆ n_steps ┆ g_limit  ┆ tip_deflection_at_failure ┆ avg_strain_slope ┆ strain_energy_at_failure │
+│ ---    ┆ ---     ┆ ---      ┆ ---                       ┆ ---              ┆ ---                      │
+│ i64    ┆ i64     ┆ f64      ┆ f64                       ┆ f64              ┆ f64                      │
+╞════════╪═════════╪══════════╪═══════════════════════════╪══════════════════╪══════════════════════════╡
+│ 0      ┆ 18      ┆ 1.254452 ┆ 0.392637                  ┆ 5.5059e-9        ┆ 459311.427733            │
+│ 100    ┆ 18      ┆ 1.670202 ┆ 0.404936                  ┆ 4.4076e-9        ┆ 670013.823232            │
+│ 102    ┆ 17      ┆ 1.579872 ┆ 0.35522                   ┆ 5.2194e-9        ┆ 841885.600955            │
+│ 109    ┆ 16      ┆ 0.743794 ┆ 0.169526                  ┆ 3.9634e-9        ┆ 84700.994498             │
+│ 114    ┆ 12      ┆ 0.278705 ┆ 0.090115                  ┆ 4.4237e-9        ┆ 14693.774447             │
+└────────┴─────────┴──────────┴───────────────────────────┴──────────────────┴──────────────────────────┘
+
+Time-series data → features/time_series.parquet
+  Shape : (7181, 31)
+  Sims  : 491, total load steps: 7181
