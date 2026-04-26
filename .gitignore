@@ -15,5 +15,4 @@
 
 # yeah I vibecode, I know man
 .claude
-./memory/
-./memory/*.md
+memory
