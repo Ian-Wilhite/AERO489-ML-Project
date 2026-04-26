@@ -1,0 +1,11 @@
+Version: v2  |  features: features-v2/features_scalar.parquet  |  figures: figures-v2
+Saved fig_01_target_dist.png
+Saved fig_02_engineered_dist.png
+Saved fig_03_raw_strain_dist.png
+Saved fig_04_engineered_scatter.png
+Saved fig_05_raw_strain_scatter.png
+Saved fig_06_predictive_summary.png
+
+All figures written to figures/
+Version: v2  |  parquet: features-v2/features_scalar.parquet  |  out: figures-v2
+Saved → figures-v2/correlation_matrix.png

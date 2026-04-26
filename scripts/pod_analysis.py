@@ -12,6 +12,7 @@ Outputs
   Printed summary tables
 """
 
+import argparse
 from pathlib import Path
 import numpy as np
 import polars as pl
@@ -24,22 +25,20 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score, KFold
 
+# ── CLI ───────────────────────────────────────────────────────────────────────
+def _parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--version", default="v1",
+                   help="Dataset version tag, e.g. v1, v2a, v2b")
+    return p.parse_args()
+
+_args = _parse_args()
+PARQUET     = Path(f"features-{_args.version}/features_scalar.parquet")
+FIGURES_DIR = Path(f"figures-{_args.version}")
+FIGURES_DIR.mkdir(exist_ok=True)
+print(f"Version: {_args.version}  |  parquet: {PARQUET}  |  figures: {FIGURES_DIR}")
+
 # ── Feature set definitions ───────────────────────────────────────────────────
-
-STRAIN_COLS = [
-    "Strain_Node_107", "Strain_Node_151", "Strain_Node_172", "Strain_Node_180",
-    "Strain_Node_192", "Strain_Node_201", "Strain_Node_250", "Strain_Node_257",
-    "Strain_Node_266", "Strain_Node_281", "Strain_Node_305", "Strain_Node_327",
-    "Strain_Node_344", "Strain_Node_368", "Strain_Node_375", "Strain_Node_407",
-    "Strain_Node_415", "Strain_Node_447", "Strain_Node_463", "Strain_Node_472",
-    "Strain_Node_488", "Strain_Node_502", "Strain_Node_506", "Strain_Node_510",
-]
-STRAIN_FAIL_COLS = [f"{c}_failure" for c in STRAIN_COLS]
-
-ORIGINAL_COLS = STRAIN_FAIL_COLS + [
-    "tip_deflection_at_failure",
-    "max_vm_stress_at_failure",
-]
 
 ENGINEERED_COLS = [
     "tip_deflection_slope",
@@ -51,8 +50,12 @@ ENGINEERED_COLS = [
     "n_steps",
 ]
 
-TARGET = "g_limit"
-PARQUET = Path("features/features_scalar.parquet")
+_NON_NODE = {
+    "sim_id", "n_steps", "RF_failure", "g_limit",
+    "tip_deflection_at_failure", "max_vm_stress_at_failure",
+} | set(ENGINEERED_COLS)
+
+TARGET   = "g_limit"
 CV_FOLDS = 10
 ENERGY_THRESHOLDS = [0.90, 0.95, 0.99]
 
@@ -136,12 +139,17 @@ def main() -> None:
     df = pl.read_parquet(PARQUET).drop_nulls()
     y  = df[TARGET].to_numpy()
 
-    MEGA_COLS = ORIGINAL_COLS + ENGINEERED_COLS
+    # Auto-detect node/_failure columns present in this parquet
+    strain_fail_cols = [c for c in df.columns if c.endswith("_failure") and c not in _NON_NODE]
+    original_cols    = strain_fail_cols + ["tip_deflection_at_failure", "max_vm_stress_at_failure"]
+    n_raw = len(strain_fail_cols)
+
+    MEGA_COLS = original_cols + ENGINEERED_COLS
 
     sets = {
-        "ORIGINAL (26 raw)":    np.array(df.select(ORIGINAL_COLS).to_numpy(),  dtype=float),
-        "ENGINEERED (7 feat)":  np.array(df.select(ENGINEERED_COLS).to_numpy(), dtype=float),
-        "MEGA (33 combined)":   np.array(df.select(MEGA_COLS).to_numpy(),      dtype=float),
+        f"ORIGINAL ({n_raw+2} raw)": np.array(df.select(original_cols).to_numpy(),  dtype=float),
+        "ENGINEERED (7 feat)":       np.array(df.select(ENGINEERED_COLS).to_numpy(), dtype=float),
+        f"MEGA ({n_raw+9} combined)": np.array(df.select(MEGA_COLS).to_numpy(),      dtype=float),
     }
 
     fig_var, axes_var = plt.subplots(1, 3, figsize=(18, 5))
@@ -207,7 +215,7 @@ def main() -> None:
     for ax2 in axes_r2:
         ax2.set_ylim(y_lo, y_hi)
 
-    for fig, path in [(fig_var, "pod_variance.png"), (fig_r2, "pod_r2_vs_k.png")]:
+    for fig, path in [(fig_var, FIGURES_DIR / "pod_variance.png"), (fig_r2, FIGURES_DIR / "pod_r2_vs_k.png")]:
         fig.tight_layout()
         fig.savefig(path, dpi=150)
         print(f"\nSaved → {path}")

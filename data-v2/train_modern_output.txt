@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/ianw/Github/Courses/AERO489-Proj/scripts/train_modern.py", line 168, in <module>
+    main(parser.parse_args())
+  File "/home/ianw/Github/Courses/AERO489-Proj/scripts/train_modern.py", line 140, in main
+    registry = _build_registry()
+               ^^^^^^^^^^^^^^^^^
+  File "/home/ianw/Github/Courses/AERO489-Proj/scripts/train_modern.py", line 42, in _build_registry
+    from models.feedforward_nn import FeedforwardNN
+  File "/home/ianw/Github/Courses/AERO489-Proj/models/feedforward_nn.py", line 17, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'

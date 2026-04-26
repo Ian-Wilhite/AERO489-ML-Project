@@ -4,6 +4,12 @@
 *.zip
 ./zips/*
 
+# training data
+
+./training_data-v1/*.csv
+./training_data-v2a/*.csv
+./training_data-v2b/*.csv
+
 # venv bc ml versions get messy with tf and polars
 .venv/*
 

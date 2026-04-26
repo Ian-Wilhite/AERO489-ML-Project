@@ -56,9 +56,7 @@ def mos_01(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     Equivalently: the 99th percentile of (y_pred - y_true).
     A pilot would use the adjusted prediction  y_pred - MOS  as their g_limit.
     """
-    # TODO: compute 99th percentile of (y_pred - y_true)
-    # TODO: floor at 0.0 — negative MOS would mean the model is already conservative
-    raise NotImplementedError
+    return float(max(0.0, np.percentile(y_pred - y_true, 99)))
 
 
 def inference_time_ms(model, X: np.ndarray, n_reps: int = 100) -> float:
@@ -66,10 +64,13 @@ def inference_time_ms(model, X: np.ndarray, n_reps: int = 100) -> float:
 
     Runs a warm-up call first to avoid cold-start JIT effects.
     """
-    # TODO: warm-up call: model.predict(X)
-    # TODO: time n_reps calls to model.predict(X), record wall-clock each iteration
-    # TODO: return float(np.median(times_ms))
-    raise NotImplementedError
+    model.predict(X)  # warm-up
+    times_ms = []
+    for _ in range(n_reps):
+        t0 = time.perf_counter()
+        model.predict(X)
+        times_ms.append((time.perf_counter() - t0) * 1000.0)
+    return float(np.median(times_ms))
 
 
 def score(

@@ -12,6 +12,7 @@ Figures saved to figures/:
   fig_06_predictive_summary.png  — All features ranked by |Pearson r|
 """
 
+import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -24,9 +25,17 @@ from sklearn.metrics import r2_score
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-FEATURES_PATH = Path("features/features_scalar.parquet")
-FIGURES_DIR   = Path("figures")
+def _parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--version", default="v1",
+                   help="Dataset version tag, e.g. v1, v2a, v2b")
+    return p.parse_args()
+
+_args = _parse_args()
+FEATURES_PATH = Path(f"features-{_args.version}/features_scalar.parquet")
+FIGURES_DIR   = Path(f"figures-{_args.version}")
 FIGURES_DIR.mkdir(exist_ok=True)
+print(f"Version: {_args.version}  |  features: {FEATURES_PATH}  |  figures: {FIGURES_DIR}")
 
 TARGET = "g_limit"
 
@@ -155,7 +164,9 @@ def scatter_panel(ax, x, y, color, title, xlabel, r, pval, r2):
 df_pl = pl.read_parquet(FEATURES_PATH)
 df    = df_pl.to_pandas()
 
-node_cols = [c for c in df.columns if c.startswith("Strain_Node_") and c.endswith("_failure")]
+_non_node = set(ENGINEERED + ["g_limit", "sim_id", "n_steps", "RF_failure",
+                               "tip_deflection_at_failure", "max_vm_stress_at_failure"])
+node_cols = [c for c in df.columns if c.endswith("_failure") and c not in _non_node]
 y = df[TARGET].to_numpy()
 
 
@@ -203,14 +214,17 @@ print("Saved fig_02_engineered_dist.png")
 # ── Figure 3: Per-node strain distributions ───────────────────────────────────
 
 ncols = 6
-nrows = 4  # 24 nodes
+nrows = int(np.ceil(len(node_cols) / ncols))
 fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 3))
 axes = axes.flatten()
 
 for i, col in enumerate(node_cols):
-    node_id = col.replace("Strain_Node_", "").replace("_failure", "")
+    node_id = col.replace("Strain_Node_", "N").replace("_failure", "").replace("Node_at_", "")
     dist_panel(axes[i], df[col].to_numpy(), COLORS["node"],
-               f"Node {node_id}", "Strain (m/m)")
+               f"Node {node_id[:30]}", "Strain (m/m)")
+
+for j in range(len(node_cols), len(axes)):
+    axes[j].set_visible(False)
 
 fig.suptitle("AERO 489 — Per-Node Strain at Failure Distributions", fontsize=13, fontweight="bold")
 fig.tight_layout()
@@ -250,17 +264,17 @@ print("Saved fig_04_engineered_scatter.png")
 # ── Figure 5: Node strains vs g_limit ────────────────────────────────────────
 
 ncols = 6
-nrows = 4
+nrows = int(np.ceil(len(node_cols) / ncols))
 fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 3.5))
 axes = axes.flatten()
 
 for i, col in enumerate(node_cols):
-    node_id = col.replace("Strain_Node_", "").replace("_failure", "")
+    node_id = col.replace("Strain_Node_", "N").replace("_failure", "").replace("Node_at_", "")
     x       = df[col].to_numpy()
     r, pv   = pearson(x, y)
     r2      = univariate_r2(x, y)
     scatter_panel(axes[i], x, y, COLORS["node"],
-                  f"Node {node_id}", "Strain (m/m)", r, pv, r2)
+                  f"Node {node_id[:30]}", "Strain (m/m)", r, pv, r2)
 
 fig.suptitle("AERO 489 — Per-Node Strain at Failure vs g-limit", fontsize=13, fontweight="bold")
 fig.tight_layout()
@@ -278,7 +292,8 @@ for feat in all_features:
     r, pv = pearson(x, y)
     r2    = univariate_r2(x, y)
     grp   = GROUP_MAP.get(feat, "node")
-    label = feat.replace("Strain_Node_", "N").replace("_failure", "").replace("_", " ")
+    label = feat.replace("Strain_Node_", "N").replace("Node_at_", "").replace("_failure", "").replace("_", " ")
+    label = label[:35]
     records.append({"feat": feat, "label": label, "r": r, "abs_r": abs(r), "r2": r2, "group": grp})
 
 records.sort(key=lambda d: d["abs_r"], reverse=True)

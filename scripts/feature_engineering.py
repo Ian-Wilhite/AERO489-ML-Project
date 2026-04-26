@@ -17,31 +17,45 @@ Engineered features (per proposal §4.1):
       NOTE: multiply by average node volume (m³) to get true strain energy in J.
 """
 
+import argparse
+import csv
 import re
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 
-# ── Parameters — adjust as needed ───────────────────────────────────────────
-DATA_DIR  = Path("TRAINING DATA")
-OUT_DIR   = Path("features")
+# ── CLI ───────────────────────────────────────────────────────────────────────
+def _parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--version", default="v1",
+                   help="Dataset version tag, e.g. v1, v2a, v2b")
+    return p.parse_args()
+
+# ── Parameters — set in main() after arg parsing ─────────────────────────────
+DATA_DIR: Path
+OUT_DIR:  Path
+STRAIN_COLS:  list[str]
+HEADER_COLS:  list[str]
+N_NAMED_COLS: int
 
 G_ACCEL          = 9.81        # m/s²
 AIRCRAFT_MASS_KG = 16_500.0    # A-10 operational weight estimate (kg) — update with actual
 YOUNGS_MODULUS   = 71.0e9      # Pa  (7075-T6 Al) — update if different material
 
-# The 24 named strain-gauge columns present in every file header
-STRAIN_COLS = [
-    "Strain_Node_107", "Strain_Node_151", "Strain_Node_172", "Strain_Node_180",
-    "Strain_Node_192", "Strain_Node_201", "Strain_Node_250", "Strain_Node_257",
-    "Strain_Node_266", "Strain_Node_281", "Strain_Node_305", "Strain_Node_327",
-    "Strain_Node_344", "Strain_Node_368", "Strain_Node_375", "Strain_Node_407",
-    "Strain_Node_415", "Strain_Node_447", "Strain_Node_463", "Strain_Node_472",
-    "Strain_Node_488", "Strain_Node_502", "Strain_Node_506", "Strain_Node_510",
-]
-HEADER_COLS = ["Time", "Total_RF", "Max_VM_Stress", "Tip_Deflection"] + STRAIN_COLS
-N_NAMED_COLS = len(HEADER_COLS)  # 28
+BASE_COLS = ["Time", "Total_RF", "Max_VM_Stress", "Tip_Deflection"]
+
+
+def _detect_columns(data_dir: Path) -> list[str]:
+    """Read the header of the first simulation file and return all column names."""
+    first = next(iter(sorted(data_dir.glob("simulation_data_*.csv"))), None)
+    if first is None:
+        raise FileNotFoundError(f"No simulation_data_*.csv files found in {data_dir}")
+    with open(first) as f:
+        for line in f:
+            if line.strip():
+                return next(csv.reader([line.strip()]))
+    raise ValueError(f"Could not read header from {first}")
 
 # ── CSV reader ───────────────────────────────────────────────────────────────
 
@@ -113,6 +127,8 @@ def extract_features(sim_id: int, raw: pl.DataFrame) -> dict | None:
     strain_energy  = 0.5 * YOUNGS_MODULUS * strain_sq_sum
     se_slope       = float(np.polyfit(RF, strain_energy, 1)[0])
 
+    k_spring = 1.0 / abs(tip_slope) if abs(tip_slope) > 1e-12 else float("nan")
+
     row: dict = {
         "sim_id":                     sim_id,
         "n_steps":                    len(df),
@@ -122,6 +138,7 @@ def extract_features(sim_id: int, raw: pl.DataFrame) -> dict | None:
         "tip_deflection_at_failure":  float(last["Tip_Deflection"]),
         "tip_deflection_slope":       tip_slope,
         "tip_per_g_at_failure":       tip_per_g_at_fail,
+        "k_spring":                   k_spring,
         # Feature B
         "avg_strain_at_failure":      float(avg_strain[-1]),
         "avg_strain_slope":           avg_strain_slope,
@@ -160,6 +177,19 @@ def build_time_series_row(sim_id: int, df: pl.DataFrame) -> pl.DataFrame:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global DATA_DIR, OUT_DIR, STRAIN_COLS, HEADER_COLS, N_NAMED_COLS
+
+    args = _parse_args()
+    DATA_DIR = Path(f"training_data-{args.version}")
+    OUT_DIR  = Path(f"features-{args.version}")
+
+    all_cols     = _detect_columns(DATA_DIR)
+    STRAIN_COLS  = [c for c in all_cols if c not in BASE_COLS]
+    HEADER_COLS  = BASE_COLS + STRAIN_COLS
+    N_NAMED_COLS = len(HEADER_COLS)
+    print(f"Version: {args.version}  |  data: {DATA_DIR}  |  out: {OUT_DIR}")
+    print(f"Detected {len(STRAIN_COLS)} strain/node columns")
+
     OUT_DIR.mkdir(exist_ok=True)
 
     files = sorted(DATA_DIR.glob("simulation_data_*.csv"))
