@@ -47,6 +47,14 @@ def max_overpredict(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.max(y_pred - y_true))
 
 
+def conservative_prediction_rate(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Fraction of predictions that are on the safe (conservative) side.
+
+    Conservative = y_pred <= y_true (model does not overstate the g-limit).
+    """
+    return float(np.mean(y_pred <= y_true))
+
+
 def mos_01(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Required margin of safety (MOS) so that ≤1% of predictions exceed true g_limit.
 

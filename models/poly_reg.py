@@ -33,12 +33,16 @@ class PolyReg(WingModel):
         self._pipeline: Pipeline | None = None
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        # TODO: build Pipeline: StandardScaler → PolynomialFeatures(degree, include_bias=False)
-        #       → StandardScaler → Ridge(alpha=self.alpha)
-        # TODO: run cross_val_score; store mean CV R² in self.cv_r2_
-        # TODO: fit on full training set
-        raise NotImplementedError
+        self._pipeline = Pipeline([
+            ("scaler1", StandardScaler()),
+            ("poly",    PolynomialFeatures(degree=self.degree, include_bias=False)),
+            ("scaler2", StandardScaler()),
+            ("ridge",   Ridge(alpha=self.alpha)),
+        ])
+        cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
+        scores = cross_val_score(self._pipeline, X_train, y_train, cv=cv, scoring="r2")
+        self.cv_r2_ = float(scores.mean())
+        self._pipeline.fit(X_train, y_train)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        # TODO: return self._pipeline.predict(X)
-        raise NotImplementedError
+        return self._pipeline.predict(X)

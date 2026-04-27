@@ -31,7 +31,8 @@ class GPR(WingModel):
     name = "gaussian_process_regression"
 
     def __init__(self, kernel=None, cv_folds: int = 10, n_restarts: int = 5):
-        # TODO: set default kernel: ConstantKernel(1.0) * RBF(1.0) + WhiteKernel(1e-3)
+        if kernel is None:
+            kernel = ConstantKernel(1.0) * RBF(1.0) + WhiteKernel(1e-3)
         self.kernel = kernel
         self.cv_folds = cv_folds
         self.n_restarts = n_restarts
@@ -40,16 +41,21 @@ class GPR(WingModel):
         self._gpr: GaussianProcessRegressor | None = None
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        # TODO: fit StandardScaler on X_train
-        # TODO: build GaussianProcessRegressor(kernel=self.kernel,
-        #           n_restarts_optimizer=self.n_restarts, normalize_y=True)
-        # TODO: run cross_val_score on scaled data; store mean CV R² in self.cv_r2_
-        # TODO: fit GPR on full scaled training set
-        raise NotImplementedError
+        self._scaler = StandardScaler()
+        X_scaled = self._scaler.fit_transform(X_train)
+        self._gpr = GaussianProcessRegressor(
+            kernel=self.kernel,
+            n_restarts_optimizer=self.n_restarts,
+            normalize_y=True,
+        )
+        cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
+        scores = cross_val_score(self._gpr, X_scaled, y_train, cv=cv, scoring="r2")
+        self.cv_r2_ = float(scores.mean())
+        self._gpr.fit(X_scaled, y_train)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        # TODO: scale X with self._scaler, return self._gpr.predict(X_scaled)
-        raise NotImplementedError
+        X_scaled = self._scaler.transform(X)
+        return self._gpr.predict(X_scaled)
 
     def predict_with_std(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Return (mean, std) — std is the GPR posterior standard deviation.
@@ -57,5 +63,5 @@ class GPR(WingModel):
         The std can be used as a data-driven, input-dependent margin of safety:
             conservative_g_limit = mean - k * std  (k typically 1–2)
         """
-        # TODO: scale X, return self._gpr.predict(X_scaled, return_std=True)
-        raise NotImplementedError
+        X_scaled = self._scaler.transform(X)
+        return self._gpr.predict(X_scaled, return_std=True)

@@ -18,17 +18,25 @@ Usage
     python compare.py --results-dir results/  # default
 """
 
+import sys
+from pathlib import Path
+
+_scripts = Path(__file__).resolve().parent
+_root    = _scripts.parent
+for _p in [str(_scripts), str(_root)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import argparse
 import json
-from pathlib import Path
 
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = Path("results")
-FIGURES_DIR = Path("figures")
+RESULTS_DIR = _root / "results"
+FIGURES_DIR = _root / "figures-v2"
 
 # §6.2 success thresholds
 THRESHOLDS = {
@@ -50,6 +58,21 @@ METRIC_LABELS = {
 }
 
 
+SHORT_NAMES = {
+    "linear_regression":          "Lin. Reg.",
+    "polynomial_regression":      "Poly Reg.",
+    "gaussian_process_regression": "GPR",
+    "random_forest":              "Rand. Forest",
+    "feedforward_nn":             "FFNN",
+    "pinn":                       "PINN",
+    "deep_learning_lstm":         "LSTM",
+}
+
+
+def _label(record: dict) -> str:
+    return SHORT_NAMES.get(record["model"], record["model"])
+
+
 def load_results(results_dir: Path) -> list[dict]:
     """Load all JSON result files; sort by adj_r2 descending."""
     records = []
@@ -57,49 +80,159 @@ def load_results(results_dir: Path) -> list[dict]:
         with open(path) as f:
             data = json.load(f)
         records.append(data)
-
-    # TODO: sort records by metrics["adj_r2"] descending
-    raise NotImplementedError
+    records.sort(key=lambda r: r["metrics"]["adj_r2"], reverse=True)
+    return records
 
 
 def print_table(records: list[dict]) -> None:
     """Print ranked comparison table to stdout with threshold pass/fail markers."""
-    # TODO: print header row with model names and metric columns
-    # TODO: for each record, format metric values; append ✓ or ✗ for columns
-    #       that have a threshold in THRESHOLDS
-    # TODO: print a footer row showing the success threshold values
-    raise NotImplementedError
+    col_w = 20
+    name_w = 22
+
+    header = f"{'Model':<{name_w}}" + "".join(f"{METRIC_LABELS[c]:>{col_w}}" for c in METRIC_COLS)
+    sep = "─" * len(header)
+    print(f"\n{sep}")
+    print(header)
+    print(sep)
+
+    for r in records:
+        m = r["metrics"]
+        name = _label(r)
+        row = f"{name:<{name_w}}"
+        for c in METRIC_COLS:
+            val = m[c]
+            cell = f"{val:.4f}"
+            if c in THRESHOLDS:
+                thresh, op = THRESHOLDS[c]
+                passed = (val >= thresh) if op == ">=" else (val <= thresh)
+                cell += " ✓" if passed else " ✗"
+            row += f"{cell:>{col_w}}"
+        print(row)
+
+    print(sep)
+    footer = f"{'Threshold':<{name_w}}"
+    for c in METRIC_COLS:
+        if c in THRESHOLDS:
+            thresh, op = THRESHOLDS[c]
+            cell = f"{op}{thresh}"
+        else:
+            cell = "—"
+        footer += f"{cell:>{col_w}}"
+    print(footer)
+    print(sep)
 
 
 def plot_bar_chart(records: list[dict]) -> None:
-    """Grouped bar chart comparing R², MAE, RMSE across models."""
-    # TODO: extract model names and (adj_r2, mae, rmse) per model
-    # TODO: plot grouped bars; add horizontal threshold lines (0.80 for R², etc.)
-    # TODO: save to FIGURES_DIR / "comparison_bar.png"
-    raise NotImplementedError
+    """Three-panel grouped bar chart: Adj. R², MAE, RMSE per model."""
+    labels = [_label(r) for r in records]
+    adj_r2 = [r["metrics"]["adj_r2"] for r in records]
+    mae    = [r["metrics"]["mae"]    for r in records]
+    rmse   = [r["metrics"]["rmse"]   for r in records]
+
+    x = np.arange(len(labels))
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+    panels = [
+        (axes[0], adj_r2, "Adj. R²",  0.80, ">=", "steelblue"),
+        (axes[1], mae,    "MAE [g]",   0.50, "<=", "darkorange"),
+        (axes[2], rmse,   "RMSE [g]",  0.75, "<=", "seagreen"),
+    ]
+    for ax, vals, ylabel, thresh, op, color in panels:
+        bars = ax.bar(x, vals, color=color, alpha=0.8, edgecolor="white")
+        ax.axhline(thresh, color="crimson", linestyle="--", linewidth=1.2,
+                   label=f"Threshold {op}{thresh}")
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=9)
+        ax.set_ylabel(ylabel)
+        ax.set_title(ylabel)
+        ax.legend(fontsize=8)
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                    f"{v:.3f}", ha="center", va="bottom", fontsize=7)
+
+    fig.suptitle("Model Comparison — Accuracy Metrics", fontweight="bold")
+    fig.tight_layout()
+    out = FIGURES_DIR / "comparison_bar.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  Saved → {out}")
 
 
 def plot_mos_chart(records: list[dict]) -> None:
-    """Bar chart of max_overpredict and MOS@1% per model."""
-    # TODO: extract max_overpredict and mos_01 per model
-    # TODO: plot side-by-side bars; add threshold line at 0.25g for MOS
-    # TODO: save to FIGURES_DIR / "comparison_mos.png"
-    raise NotImplementedError
+    """Side-by-side bars: max_overpredict and MOS@1% per model."""
+    labels       = [_label(r) for r in records]
+    max_over     = [r["metrics"]["max_overpredict"] for r in records]
+    mos          = [r["metrics"]["mos_01"]          for r in records]
+
+    x   = np.arange(len(labels))
+    w   = 0.35
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    ax.bar(x - w / 2, max_over, w, label="Max over-predict [g]", color="tomato",   alpha=0.85)
+    ax.bar(x + w / 2, mos,      w, label="MOS@1% [g]",           color="steelblue", alpha=0.85)
+    ax.axhline(0.25, color="black", linestyle="--", linewidth=1.2, label="MOS threshold (0.25 g)")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=10)
+    ax.set_ylabel("g-units [g]")
+    ax.set_title("Safety Margins: Max Over-Prediction and MOS@1%", fontweight="bold")
+    ax.legend()
+    fig.tight_layout()
+    out = FIGURES_DIR / "comparison_mos.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  Saved → {out}")
 
 
 def plot_residuals(records: list[dict]) -> None:
-    """Residual scatter: y_pred vs y_true for each model in a grid."""
-    # TODO: create subplot grid (2 rows × 4 cols for 7 models)
-    # TODO: for each model: scatter(y_true, y_pred); add y=x diagonal
-    #       colour points by residual sign (red = overpredict, blue = underpredict)
-    # TODO: annotate with RMSE and MAE from stored metrics
-    # TODO: save to FIGURES_DIR / "residuals.png"
-    raise NotImplementedError
+    """2×4 grid of y_pred vs y_true scatter plots, one per model."""
+    n   = len(records)
+    ncols = 4
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 4, nrows * 4))
+    axes_flat = axes.flatten()
+
+    for i, r in enumerate(records):
+        ax = axes_flat[i]
+        y_true = np.array(r["y_true_test"])
+        y_pred = np.array(r["y_pred_test"])
+        residuals = y_pred - y_true
+
+        colors = np.where(residuals > 0, "tomato", "steelblue")
+        ax.scatter(y_true, y_pred, c=colors, s=20, alpha=0.7, edgecolors="none")
+
+        lo = min(y_true.min(), y_pred.min()) - 0.2
+        hi = max(y_true.max(), y_pred.max()) + 0.2
+        ax.plot([lo, hi], [lo, hi], "k--", linewidth=1, label="y = x")
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(lo, hi)
+        ax.set_xlabel("True g_limit [g]", fontsize=9)
+        ax.set_ylabel("Predicted g_limit [g]", fontsize=9)
+        ax.set_title(_label(r), fontweight="bold", fontsize=10)
+
+        rmse_val = r["metrics"]["rmse"]
+        mae_val  = r["metrics"]["mae"]
+        ax.text(0.05, 0.93, f"RMSE={rmse_val:.3f} g\nMAE={mae_val:.3f} g",
+                transform=ax.transAxes, fontsize=8, va="top",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7))
+
+    for j in range(i + 1, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    fig.suptitle("Residual Scatter: Predicted vs True g_limit\n"
+                 "(red = over-predict, blue = under-predict)", fontweight="bold")
+    fig.tight_layout()
+    out = FIGURES_DIR / "comparison_residuals.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  Saved → {out}")
 
 
 def main(args) -> None:
     FIGURES_DIR.mkdir(exist_ok=True)
-    results_dir = Path(args.results_dir)
+    results_dir = Path(args.results_dir) if args.results_dir else RESULTS_DIR
+    if not results_dir.is_absolute():
+        results_dir = (_root / results_dir).resolve()
 
     if not list(results_dir.glob("*.json")):
         print(f"No result JSON files found in {results_dir}.")

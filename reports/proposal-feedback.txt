@@ -1,0 +1,31 @@
+========================================================================
+AERO 489/689 -- First Report Feedback
+Project: Machine Learning Prediction of Structural Load Limits in Damaged Wings
+Grade: 86/100
+========================================================================
+
+RUBRIC BREAKDOWN
+----------------------------------------
+  Problem clarity and relevance (25%): 23/25
+  Technical plan and feasibility (25%): 21/25
+  Data and evaluation (20%): 18/20
+  Timeline and risk management (15%): 13/15
+  Writing quality and presentation (15%): 11/15
+  TOTAL........................................ 86/100
+
+STRENGTHS
+----------------------------------------
+  + Highly compelling and original problem: predicting max g-load for battle-damaged wings using strain gauge data.
+  + Thoughtful data generation approach using ABAQUS FEA with bullet-hole damage patterns.
+  + Excellent quantitative success criteria (adjusted R^2 > 0.8, RMSE < 0.75g, MAE < 0.5g, Required MOS < 0.25g).
+  + Good range of ML approaches from classical (linear/polynomial regression, GPR, RF) to modern (NN, PINN, deep learning).
+  + Practical consideration of real-time inference requirements for onboard deployment.
+
+AREAS FOR IMPROVEMENT
+----------------------------------------
+  - Section 4.3 contains placeholder text '<sim data, train physical model, let it work>' -- this must be completed in the final report.
+  - The report is missing the required 'Aerospace Impact' section (Section 9 in the rubric).
+  - Timeline uses a checklist format rather than a proper Gantt chart or milestone table -- consider adding more structure.
+  - Some subsections follow the rubric questions verbatim as headers, which reduces the grant-style narrative quality.
+
+========================================================================

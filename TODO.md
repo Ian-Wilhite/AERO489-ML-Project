@@ -1,52 +1,114 @@
-# goal:
- * I want as many methods applied to this problem as possible 
-   * I want pretty pictures 
-     * I would like to show data analysis that represents the spread of variables and their distributions
-     * I would like to show an understanding of the classical methods, their evaluation methods, and the models that dictate them
-     * I would like to show an implementation of the modern methods including training curves 
-     * I would like to show physically interpretable methods and how hybrid approaches can combine both worlds
-     * I would like to show a complete comparison of performance across all models -> and therefore need to give each approach a standardized comparison metric (like isolating 20% of the data from the start)
-   * then I want to be able to make a couple pareto fronts (idk if this even makes sense):
-     * pareto front #1 -> I want to plot predictive R^2 over compute time/effort. I think the classical models will blow the AI models out of the park
-     * pareto front #2 -> I want to plot predictive R^2 over the physical interpretability. maybe this means isolating a separate part of the datasets that  
-     * pareto front #3 -> I want to plot the R^2 over development time; the machine learning models with more complex setup like physical models and complex systems should be penalized for that, while simple models (like linear regression) should be rewarded for their simplicity
-   * what other figures would make for a pretty report that demonstrate an understanding of the ML processes being taken
+# AERO 489 — Ian's ML TODO
+> Role: Modern ML Approaches (Feedforward NN, PINN, Deep Learning/LSTM)
+> Deadline: 5/1 submission | 4/29 check-in | TODAY 4/26
 
-# features:
- * inverse of tip deflection slope in units N/m (like a spring constant for the beam)
- * all the strain gauges are kinda useless and give the same data... so how many of them do you actually need -> this could be an expanded research question
- * remove n_steps as a training varaible -> its an artifact of the sim export and nothing more (it wouldnt be available to the pilot)
- * I want to explore more strain gauge simplification -- what if you take the xth percentile of the strain gauges as a feature, is that useful? what about a dual axis plot showing the strain gauge percentile chart overlaid with their R^2 to g_limit
-   * long shot -> if you take all of the strain gauges and plot their percentiles, then fit a polynomial (low, ~3rd order) to their shape, then re-predict your maximum then you end up able to extract the max stress in a way that still provides smoothing and physical interpretability with increased robustness to extreme outliers. 
-   * or just take the 95th percentile or sm
-   * I would like a dual-axis plot that shows: 
-     * a family of box plots for the percentiles of each strain value with the fitted polynomial
-     * the R^2 predictive value of:
-       * the discrete "always take the nth" max/2nd/3rd used to predict the max g loading
-       * the continuous samples taken from the fitted polynomial R^2 to continuously interpolate non-whole percentiles (and smoothed!) 
- * what other features can I find from this dataset, and once I have a TON of them, how can I start sifting through to find the ones that are 1) independent and 2) useful predictors 
+---
 
+## Current results summary (what exists)
 
-# Feature analysis
- * there is a current POD r2 vs k that includes the 26 origional and 7 engineered
-   * 1) can you make the vertical axis to the same scale so that it shows the comparison between the scales
-   * 2) can you add a third plot that shows all of the features Origional and Engineered 
-   * 3) same changes to the pod_variance chart
+| Model         | adj-R²  | MAE (g) | RMSE (g) | max_overpredict (g) | MOS_1% (g) | infer (ms) | Pass? |
+|---------------|---------|---------|----------|---------------------|------------|------------|-------|
+| Feedforward NN | 0.988  | 0.094   | 0.121    | 0.356               | 0.329      | 3.7        | ✓*    |
+| PINN          | 0.987   | 0.095   | 0.122    | 0.347               | 0.330      | 2.6        | ✓*    |
+| LSTM          | 0.861   | 0.232   | 0.413    | 2.327               | 0.826      | 152        | ✗     |
 
-# methods:
-## very classical
- * linear regression
- * polynomial regression
-## classical
- * GPR
- * random forest
- * ridge lasso
-## modern
- * feedforward NN
- * gradient boosting
-## very modern
- * PINN
-   * multiple physical models
- * deep learning
+*MOS_1% exceeds the 0.25g pass threshold — flag this in the report.
+LSTM fails on MOS and max_overpredict; this is a key discussion point.
 
+---
 
+## IMMEDIATE — run before writing anything
+
+- [ ] **Run PINN ablation** (`scripts/pinn_ablation.py`) — compares hooke_strain / energy_quad / energy_rate physics residuals
+  - Output goes to `data-v2/pinn_ablation_output.txt` (currently empty)
+  - Confirm before running: ~3× 25s = ~75s total — OK to proceed
+
+---
+
+## Figures needed (Ian's contribution to report)
+
+- [ ] **Predicted vs True** scatter for each model (3 plots or 1 3-panel figure)
+  - axes: true g-limit (x), predicted g-limit (y); draw y=x reference line
+  - annotate R², RMSE on each panel
+- [ ] **Error/residual distribution** histograms or violin plots (predicted − true) per model
+  - highlight the MOS threshold at ±0.25g
+- [ ] **PINN ablation bar chart** — adj-R² / RMSE / MOS for each physics residual variant
+- [ ] **Training curves** — already exist in `figures-v2/` for all 3 models ✓
+- [ ] **Pareto front #1**: adj-R² vs inference time (log scale) — all models (need classical team's numbers)
+- [ ] **Pareto front #2**: adj-R² vs physical interpretability (ordinal axis: none / partial / full)
+  - order: LSTM < Feedforward NN < PINN < GPR / physical model
+
+---
+
+## Report writing (Ian's sections)
+
+### Methods section — what to write
+
+- [ ] **Feedforward NN**: architecture (layers, activations, hidden dim), loss = MSE, optimizer, train/val split, early stopping if any
+- [ ] **PINN**: same MLP + physics residual loss; explain all 3 physics models (Hooke's law, energy quadratic, Castigliano/energy rate); describe lambda weighting; note that physics_loss is normalised by training-set std
+- [ ] **LSTM**: architecture, why sequence model was attempted (time-series data across 20 load steps), lookback window, input/output
+
+### Results section — what to write
+
+- [ ] Table of all 3 models with the 5 metrics from proposal: adj-R², MAE, RMSE, max_overpredict, MOS_1%, inference time
+- [ ] Reference training curve figures and predicted vs true figures
+- [ ] PINN ablation: which physics residual formulation wins and by how much
+
+### Discussion section — key talking points (Ian drafts, human writes)
+
+<!-- CLAUDE NOTES — human authorship recommended for this section
+Suggested talking points:
+- NN and PINN are nearly identical in performance — physics regularization didn't significantly change accuracy on this dataset; possible reasons: (1) data is sufficiently rich that the physics term is redundant, (2) lambda may need tuning, (3) the hooke_strain residual is a weak constraint compared to the full structural model
+- LSTM dramatically underperforms (R²=0.861 vs 0.988) and has huge max_overpredict (2.33g). Likely reason: LSTM expects temporal autocorrelation between load steps, but the at-failure snapshots used as features don't carry step-order information that helps — LSTM is fighting the wrong problem structure
+- MOS_1% for NN and PINN (~0.33g) exceeds the 0.25g goal. Discuss whether this is a data-size issue or a fundamental limit of the feature set
+- Inference time: PINN (2.6ms) and NN (3.7ms) are real-time capable; LSTM (152ms) is borderline for embedded deployment
+- Safety implication: for a safety-critical system, the model should never overpredict (dangerous). Max_overpredict matters more than R². The LSTM's 2.33g overpredict would be mission-critical.
+-->
+
+---
+
+## Evaluation requirements (from proposal — make sure all are hit)
+
+- [ ] Adjusted R² reported ← done in JSON, just needs to go in table
+- [ ] RMSE reported ← done
+- [ ] MAE reported ← done
+- [ ] Maximum overprediction reported per model ← done
+- [ ] Required MOS_1% reported per model ← done
+- [ ] Inference time comparison (same hardware) ← done
+- [ ] Train vs test performance comparison (to check for overfitting) ← need to extract train metrics, not just test
+
+---
+
+## Report structure checklist (from final report rubric — 100 pts)
+
+| Section | pts | Ian's contribution |
+|---------|-----|--------------------|
+| Problem clarity | 15 | team writes intro; Ian reviews |
+| Preliminary feedback response | 10 | team writes; note any scope changes |
+| Background & related tools | 10 | team writes; Ian can cite PINN refs |
+| **Technical approach** | 15 | **Ian writes NN/PINN/LSTM subsections** |
+| Data & preprocessing | 10 | team writes; Ian notes feature set used |
+| **Experimental setup & comparison** | 15 | **Ian writes eval metrics section + pareto fronts** |
+| **Results & discussion** | 15 | **Ian writes modern ML results subsection** |
+| Writing & professionalism | 10 | all |
+
+---
+
+## Lower-priority / stretch goals
+
+- [ ] Strain gauge sensitivity analysis — what if you remove gauges? at what count does R² drop? (original TODO idea)
+- [ ] 95th-percentile strain as single aggregate feature — quick test, interesting ablation
+- [ ] Pareto front #3: R² vs development effort (ordinal) — may be too subjective
+
+---
+
+## Already done — do not re-implement
+
+- [x] Feedforward NN model + training script
+- [x] PINN model (3 physics residuals) + training script
+- [x] LSTM model + training script
+- [x] Loss curves for all 3 models (`figures-v2/`)
+- [x] Feature engineering (`scripts/feature_engineering.py`)
+- [x] EDA figures (dist, scatter, POD, correlation)
+- [x] `compare.py` for cross-model evaluation
+- [x] Result JSONs with y_pred/y_true arrays saved

@@ -27,12 +27,14 @@ class LinearReg(WingModel):
         self._pipeline: Pipeline | None = None
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        # TODO: build sklearn Pipeline: StandardScaler → LinearRegression
-        # TODO: run cross_val_score with KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
-        #       store mean CV R² in self.cv_r2_
-        # TODO: fit the pipeline on the full training set
-        raise NotImplementedError
+        self._pipeline = Pipeline([
+            ("scaler", StandardScaler()),
+            ("lr", LinearRegression()),
+        ])
+        cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
+        scores = cross_val_score(self._pipeline, X_train, y_train, cv=cv, scoring="r2")
+        self.cv_r2_ = float(scores.mean())
+        self._pipeline.fit(X_train, y_train)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        # TODO: return self._pipeline.predict(X)
-        raise NotImplementedError
+        return self._pipeline.predict(X)

@@ -129,6 +129,9 @@ def extract_features(sim_id: int, raw: pl.DataFrame) -> dict | None:
 
     k_spring = 1.0 / abs(tip_slope) if abs(tip_slope) > 1e-12 else float("nan")
 
+    se_fail  = float(strain_energy[-1])
+    vm_fail  = float(last["Max_VM_Stress"])
+
     row: dict = {
         "sim_id":                     sim_id,
         "n_steps":                    len(df),
@@ -143,10 +146,15 @@ def extract_features(sim_id: int, raw: pl.DataFrame) -> dict | None:
         "avg_strain_at_failure":      float(avg_strain[-1]),
         "avg_strain_slope":           avg_strain_slope,
         # Feature C
-        "strain_energy_at_failure":   float(strain_energy[-1]),
+        "strain_energy_at_failure":   se_fail,
         "strain_energy_slope":        se_slope,
-        # Max stress sanity check
-        "max_vm_stress_at_failure":   float(last["Max_VM_Stress"]),
+        # Max stress
+        "max_vm_stress_at_failure":   vm_fail,
+        # Derived features D: inverse and sqrt transforms
+        "inv_tip_per_g_at_failure":       1.0 / tip_per_g_at_fail if abs(tip_per_g_at_fail) > 1e-12 else float("nan"),
+        "inv_tip_deflection_slope":       1.0 / tip_slope         if abs(tip_slope)          > 1e-12 else float("nan"),
+        "inv_max_vm_stress_at_failure":   1.0 / vm_fail           if abs(vm_fail)            > 1e-12 else float("nan"),
+        "sqrt_strain_energy_at_failure":  float(np.sqrt(max(se_fail, 0.0))),
     }
 
     # Individual gauge values at failure — useful as raw inputs for ML

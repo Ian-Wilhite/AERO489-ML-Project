@@ -1,0 +1,108 @@
+AERO 689 Project Instructions
+Aerospace Engineering, Texas A&M University
+Instructor: Raktim Bhattacharya
+
+1. Problem Selection
+Students should choose a project problem that is:
+• Moderately complex: more than a simple tutorial but small enough to
+scope in 2 weeks.
+• Aerospace engineering relevant: examples include aircraft performance,
+flight systems, control, structural health monitoring, spacecraft operations,
+launch vehicles, propulsion, aerodynamics, or autonomy.
+• Feasible with available data and tools: a problem that can be framed as
+a prediction, classification, anomaly detection, optimization, or physicsinformed ML task.
+Some examples:
+• Predicting aerodynamic coeﬀicients from limited flight or CFD data.
+• Detecting structural damage or fatigue from sensor data.
+• Classifying flight phases or operational modes using flight data.
+• Estimating vehicle state or trajectory with a hybrid physics+ML model.
+• Identifying anomalies in propulsion or thermal systems.
+These are just examples. Students may work on any aerospace-relevant problem
+they are interested in, as long as it is scoped for roughly two weeks.
+Avoid overly broad topics or full-scale system development that would take much
+longer than two weeks.
+
+2. Preliminary Submission Deadline
+• Preliminary work due: April 19, 12:00 PM Central US Time.
+• This submission should include your problem statement, project plan, and
+the first-report draft as described below.
+
+3. First Report Guidance
+The first report should read like an NSF-style white paper or proposal. It should
+be concise, professional, and focused on the engineering case for the project.
+This report is also training for writing grant-style submissions and technical
+reports that are expected in aerospace careers and graduate work.
+Required sections
+1. Title and Team
+• Project title.
+1
+
+• Team members and roles.
+2. Problem Statement
+• What aerospace problem are you solving?
+• Why is it important for aerospace engineering or operations?
+• What are the engineering consequences if the problem is not solved?
+3. Background and Motivation
+• Brief context and relevant existing work.
+• Why is the problem challenging today?
+• What gap does this project address?
+4. Proposed Approach
+• What machine learning or hybrid modeling method will you use?
+• What are the model inputs and outputs?
+• Why is this approach appropriate for the problem?
+5. Data and Methods
+• What data sources will you use?
+• How will you collect, preprocess, and validate the data?
+• What performance metrics will you use to evaluate success?
+6. Expected Outcomes
+• What do you expect to deliver at the end of the project?
+• How will you know if the project succeeded?
+7. Timeline and Milestones
+• A simple two-week plan with milestones.
+• Include at least one intermediate checkpoint before the final submission.
+8. Risks and Mitigation
+• What are the main risks or challenges?
+• How will you mitigate them?
+9. Aerospace Impact
+• Why does this matter for aerospace engineering specifically?
+• How will the result translate to aerospace applications?
+
+4. Rubric for the First Report
+The report will be evaluated on the following criteria:
+• Problem clarity and relevance (25%)
+– The aerospace problem is clearly defined.
+– The motivation is strong and relevant.
+• Technical plan and feasibility (25%)
+– The proposed approach is appropriate and realistic for a 2-week effort.
+– The plan includes a coherent ML or hybrid modeling strategy.
+• Data and evaluation (20%)
+– The report identifies usable data sources and preprocessing needs.
+– Performance metrics are meaningful and aligned with the objective.
+• Timeline and risk management (15%)
+– A feasible schedule is presented.
+
+2
+
+– Key risks are identified with mitigation strategies.
+• Writing quality and presentation (15%)
+– The report is organized, professional, and concise.
+– The writing demonstrates clear communication, strong technical
+structure, and a grant-style narrative.
+– Figures, tables, or diagrams (if used) support the narrative.
+
+5. Submission Notes
+• Treat this report as a technical white paper: concise, clearly written, and
+focused on engineering impact.
+• Use this assignment as practice in writing grant-style proposals and technical reports, with clear problem framing, logical flow, and professional
+presentation.
+• Students may use LLM tools to help draft text, brainstorm structure, or
+check grammar, but must verify all technical content and cite or acknowledge any AI assistance. The instructor will check the technical correctness
+of the work and may ask for clarification if AI-assisted content is used.
+• Keep the document short (2-4 pages is ideal) but complete enough for the
+instructor to understand the project scope and plan.
+• Include references to any prior work, datasets, or algorithms that inspired
+the approach.
+
+3
+
+

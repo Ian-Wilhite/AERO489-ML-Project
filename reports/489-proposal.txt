@@ -1,0 +1,240 @@
+Machine Learning Prediction of Structural
+Load Limits in Damaged Wings
+Barrett Brown, Kirin Chadha, Malachi Drew, Ian Wilhite, & Adam Zheng
+Dr. Raktim Bhattacharya
+AERO 489/689: Introduction to Machine Learning for Aerospace Engineers
+Spring 2026
+
+1. Title and Team
+1.1. Project title
+This project is the “Machine Learning Prediction of Structural Load Limits in Damaged Wings”
+for the Spring 2026 AERO 489 “Special Topics: Applied Machine Learning” course.
+
+1.2. Team members and roles
+Our team includes:
+● Barrett Brown: Scripting & Simulation (Data Production)
+● Kirin Chadha: Classical Machine Learning Approaches
+● Malachi Drew: Aircraft Design and Modeling & Classical Machine Learning
+Approaches
+● Ian Wilhite: Modern Machine Learning Approaches
+● Adam Zheng: FEA Modeling and Meshing
+
+2. Problem Statement
+2.1. What aerospace problem are you solving?
+As aircraft continue to see deployment in contested environments, they are likely to
+receive damage, and pilots must perform complex evasive maneuvers to prevent continued
+damage and continue operation. Pilots must assess the damage to their aircraft accurately
+through Structural Health Monitoring (SHM) in order to effectively plan these maneuvers and
+prevent critical aircraft failure while utilizing their full flight capabilities, requiring a
+quantitative estimation of maneuverable capabilities using measurable data onboard the aircraft.
+
+2.2. Why is it important for aerospace engineering or operations?
+Aircraft continue to be utilized in contested environments in which damage can often be
+sustained to an aircraft, causing critical mission failure, risking high-value assets, and causing
+undue loss of life. In the short term, there is a need for human pilots to assess their damage and
+capable maneuverability, in the long term, there is a need to design data-informed SHM systems
+that can be integrated into future autonomous intelligent aircraft, enabling them to revolutionize
+deployment in contested domains.
+
+2.3. What are the engineering consequences if the problem is not solved?
+Aircraft operating in these contested environments without proper ability to estimate
+their sustained damage and maximum viable maneuverability remain vulnerable to
+overestimation of modified capabilities resulting in critical failures and underestimation of
+modified capabilities resulting in overly-conservative trajectory planning in time-critical
+deployments.
+
+3. Background and Motivation
+3.1. Brief context and relevant existing work.
+Current state of the art Structural Health Monitoring (SHM) in aerospace has largely
+been guided by targeted preventative maintenance, failure detection of sensors, and the
+automation of inspection tasks of critical infrastructure [1]. These methods increasingly utilize
+machine learning for interpretation, and current work includes leveraging model based methods
+to improve physical interpretability, extrapolation, and decrease training time [2]. Relevant to
+this project, a group at NUST previously utilized in flight strain data to predict fatigue damage
+within the aircraft structure [3].
+
+3.2. Why is the problem challenging today?
+In-flight damage assessment and load prediction requires estimating many complex
+internal and external dynamic factors, which requires gathering datasets of many modified
+aircraft that are subjected to severe flight-altering damage, then experimentally determining their
+new maximum g-limit. These costs lead to a large issue of data scarcity, indicating utility in
+simulated data and physically informed methods that perform better on smaller datasets.
+
+3.3. What gap does this project address?
+Existing works focus on long-term aircraft maintenance, not real-time damage
+estimation. The proposed problem addresses the need for in-flight understanding of major
+flight-altering damage, and leveraging simulation to perform this estimation with limited data.
+
+4. Proposed Approach
+4.1. What machine learning or hybrid modeling method will you use?
+Derived Features:
+A. Tip Deflection/Acceleration [m / m/s^2]
+B. Average Strain Change Factor [mm/mm]
+C. Strain energy ½ · Σ(εᵢ² · E · Vᵢ) [J]
+
+Classical ML Approaches:
+1) Linear regression on derived features
+2) Polynomial regression on derived features
+3) Gaussian Process Regression (GPR)
+4) Random Forest (RF)
+Modern ML Approaches:
+5) Feedforward Neural Network (NN)
+6) Physically Informed Neural Network (PINN)
+7) Deep Learning
+
+4.2. What are the model inputs and outputs?
+● Time series Inputs:
+○ 20 strain gauges per wing
+○ Wing tip deflection
+○ Total aircraft acceleration
+● Constant Inputs:
+○ Locations of strain gauges (xyz wrt. airframe)
+○ Full aircraft acc (gs) -> maybe constant maybe variable
+■ 2*F = mg*k, k is the number of g’s the aircraft pulls, F is the force on one
+wing. Force is in the direction of lift.
+● Output
+○ Max allowable G loading before failure
+
+4.3. Why is this approach appropriate for the problem?
+We choose to leverage simulated data due to the data scarcity in datasets of aircraft
+damage, and the fidelity of modern simulation tools. The usage of strain gauges mirrors the cost
+effectiveness of the tooling required, and the amount of useful data able to be gathered. The
+shear loading across an aircraft wing is well studied (Fig. 1), and therefore provides analytical
+governing equations and models to seed physically derived Machine Learning (ML) methods.
+ML methods should therefore be able to identify the trends from the loading conditions applied,
+and successfully approximate the loading condition before failure.
+
+Figure 1: Shear forces acting on the wing.
+
+5. Data and Methods
+5.1. What data sources will you use?
+We plan to use data from a purpose built simulation in ABAQUS that will give us strain
+and deflection information for the damaged aircraft wing. These simulations will be conducted
+by intersecting 20 bullet trajectories with the internal structure of the wing and removing the
+associated material, as shown in Figure 2. While this is still an approximation (a bullet would
+cause more damage than a clean removal of material), this method will quickly create training
+data for the ML algorithms that is close to an approximation of real life. Unfortunately, we will
+not be able to include the effect of the bullet holes on the skin and the interaction between the
+skin and the internal structure of the wing. This approach relies on the internal structure of the
+model, and neglects the structural integrity contributions from the skin.
+
+Figure 2: Example of a damaged wing
+
+5.2. How will you collect, preprocess, and validate the data?
+We will collect our data from the ABAQUS simulation. Our outputs from the ABAQUS
+simulations will include the wing tip deflection at failure 1, wing load at failure, and the location
+and measurements of 20 strain gauges throughout the wing at a range of loads. This “time
+series” data will give us the ability to predict the maximum load even when the wing does not
+experience these loads, as in a real-world situation you cannot find the maximum load
+experimentally. So, for each simulation, the useful output data we will get is:
+● Tip Deflection
+○ ~20 load points between unloaded and failure
+● 20 strain gauges
+○ ~ 20 load points between unloaded and failure
+This data cannot be validated, as we do not have access to an A-10 Warthog or its wing,
+nor do we have the ability to shoot it with an anti-aircraft gun; however, we believe that this will
+be an adequate approximation of what this data would look like in real life.
+
+5.3. What performance metrics will you use to evaluate success?
+We will use adjusted R 2, MAE, and RMSE to determine how well the models predict in
+the test data. We will also compare performance in the training data to catch any overfitting that
+may occur. Since this is a safety critical system, we will report the maximum overprediction
+made by each model (predicted g-limit - FEA modeled g-limit). We will also use required
+margin of safety (MOS) as a performance metric, where the required MOS for a model is such
+that under 1% of predictions will exceed the actual g-limit after subtracting the MOS from the
+predicted g-limit.
+Another important factor is the inference time for each model, since this should be
+computed real-time on the aircraft. Since many details may differ between this model and a
+deployed model, we will use inference times on the same computer hardware to compare each
+model to each other, but will not compare to external benchmarks or requirements.
+
+6. Expected Outcomes
+6.1. What do you expect to deliver at the end of the project?
+We expect to deliver several machine learning models capable of predicting max g-loads
+for a damaged aircraft wing. Models will use a variety of classical and modern machine learning
+techniques, and will require minimal inputs as could be measured on an actual combat aircraft
+(with minimal added complexity/weight). Analysis of each model’s efficacy will be presented
+based on its performance on test data (developed in the same way as the training data).
+1
+
+We define failure as when any point of the wing reaches the elastic limit of the material.
+
+6.2. How will you know if the project succeeded?
+In short, project success will be defined by the development of one or more models that
+reliably predict the modified g-limit for a damaged wing. The following requirements must be
+met for a model to qualify as accurate and reliable:
+●
+●
+●
+●
+●
+
+Adjusted R 2 > 0.8
+RMSE < 0.75g
+MAE < 0.5g
+Required MOS < 0.25g
+Similar performance on test & training sets
+
+7. Timeline and Milestones
+Our timeline is as follows:
+4/19: Working Abaqus sim due
+4/19: Proposal Submission
+4/21: Abaqus Data Processing Due
+4/22: Abaqus Runs on HRBB Computers (WIP)
+4/24: Preliminary ML scripts due (without data) (parallelized)
+4/27: ML Analysis & Training Due
+4/29: Final Check-in & Report Finalization
+5/1: Project Submission
+
+8. Risks and Mitigation
+8.1. What are the main risks or challenges?
+The biggest risks in this project relate to insufficiency of data. In the deployment of this
+model, data would be much more limited than in our FEA simulations (20 strain gauges instead
+of a whole stress/strain field). There is a risk that the data provided will be insufficient to
+accurately predict the load limit of the structure across varied damage types and positions.
+The second major risk is that our simulations will be too computational intensive to
+produce sufficient training data. Since we’re developing training data from conventional
+simulations instead of just pulling from the real world, each datapoint will require significant
+computational resources. If the training data requirement is too large, we will be unable to meet
+it.
+
+8.2. How will you mitigate them?
+To ensure the obtainable data at deployment is sufficient, we’ll implement a two-pronged
+approach. First, we will match the training data to the expected real world data. Instead of
+inputting a large amount of stress and strain data, we will process the simulation results to pull
+out only strain at 20 points, tip deflection, and g-limit (derived from load at failure). Second, we
+will disperse the strain gauges across the whole wing in all three dimensions. This will ensure
+data collected has relevance to the whole structure, despite its limits.
+To minimize the risk in developing training data, we have opted for a skinless structure
+and are using FEA best practices to reduce computational requirements (localized mesh
+refinement around holes, etc). We have also obtained access to the High Performance Research
+Computer (HPRC) and automated most of the simulation process to decrease computation time
+and increase the number of simulations we can run (more training data).
+
+9. Aerospace Impact
+9.1. Why does this matter for aerospace engineering specifically?
+In aerospace environments, real-time assessment of structural limits is uniquely valuable.
+When flying an aircraft, pausing for lengthy analysis isn’t possible: the plane has to keep flying,
+and decisions have to be made in moments. Pilots with real-time structural health information
+(such as a real-time g-limit) will be better equipped to fly in demanding off-nominal conditions
+while maintaining both safety and maximum performance.
+
+9.2. How will the result translate to aerospace applications?
+If successful in developing a reliable model for g-limit prediction, this project will serve
+as the first step toward an integrated SHM system in combat aircraft. By installing minimal
+sensors (small strain-gauges) and leveraging existing information (g-meter), aircraft designers
+can collect all the information needed to deploy such a model on new or existing aircraft. While
+a new model will be required for each aircraft, this should be trivial given existing structural
+analysis requirements. Once deployed, any pilot (or control scheme) in a damaged aircraft could
+quickly reference the updated g-limit and ensure its maneuvers remained within the modified
+limit while exiting the fight and returning to base.
+
+References
+[1] Machine Learning for Structural Health Monitoring of Aerospace Structures: A Review
+https://www.mdpi.com/1424-8220/25/19/6136
+[2] Physics-informed machine learning for Structural Health Monitoring
+https://arxiv.org/pdf/2206.15303
+[3] Integrated engineering framework for fatigue damage prediction of fighter aircraft using
+machine learning https://www.sciencedirect.com/science/article/pii/S2590123025037661
+
+

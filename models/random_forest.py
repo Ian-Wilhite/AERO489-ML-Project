@@ -39,14 +39,24 @@ class RandomForest(WingModel):
         self._model: RandomForestRegressor | None = None
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
-        # TODO: run GridSearchCV(RandomForestRegressor(random_state=self.seed),
-        #           self.param_grid, cv=5, scoring="r2", n_jobs=-1)
-        #       store best_params_ in self.best_params_
-        # TODO: run outer cross_val_score with best params; store mean in self.cv_r2_
-        # TODO: refit on full training set; store model in self._model
-        # TODO: store self._model.feature_importances_ in self.feature_importances_
-        raise NotImplementedError
+        grid_search = GridSearchCV(
+            RandomForestRegressor(random_state=self.seed),
+            self.param_grid,
+            cv=5,
+            scoring="r2",
+            n_jobs=-1,
+        )
+        grid_search.fit(X_train, y_train)
+        self.best_params_ = grid_search.best_params_
+
+        best_rf = RandomForestRegressor(**self.best_params_, random_state=self.seed)
+        cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
+        scores = cross_val_score(best_rf, X_train, y_train, cv=cv, scoring="r2")
+        self.cv_r2_ = float(scores.mean())
+
+        self._model = RandomForestRegressor(**self.best_params_, random_state=self.seed)
+        self._model.fit(X_train, y_train)
+        self.feature_importances_ = self._model.feature_importances_
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        # TODO: return self._model.predict(X)
-        raise NotImplementedError
+        return self._model.predict(X)

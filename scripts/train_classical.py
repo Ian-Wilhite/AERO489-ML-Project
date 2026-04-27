@@ -12,10 +12,18 @@ Usage
 Short names: lr, poly, gpr, rf
 """
 
+import sys
+from pathlib import Path
+
+_scripts = Path(__file__).resolve().parent
+_root    = _scripts.parent
+for _p in [str(_scripts), str(_root)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import argparse
 import json
 import time
-from pathlib import Path
 
 import numpy as np
 
@@ -41,7 +49,7 @@ def _build_registry() -> dict:
     }
 
 
-RESULTS_DIR = Path("results")
+RESULTS_DIR = _root / "results"
 
 
 def train_and_save(short_name: str, model, feature_cols: list[str]) -> None:
@@ -49,26 +57,50 @@ def train_and_save(short_name: str, model, feature_cols: list[str]) -> None:
     print(f"  {model.name}")
     print(f"{'─'*60}")
 
-    # TODO: call load_scalar(feature_cols=feature_cols)
-    # TODO: record wall-clock time for model.fit(X_train, y_train)
-    # TODO: call score(model, X_test, y_test, n_features=len(feature_cols))
-    # TODO: print metrics table (adj_r2, mae, rmse, max_overpredict, mos_01,
-    #       inference_time_ms) + CV R² if available (model.cv_r2_)
-    # TODO: if model has feature_importances_ (RandomForest), print top-10
-    # TODO: build results dict:
-    #   {
-    #     "model":          model.name,
-    #     "feature_set":    feature_cols,
-    #     "n_features":     len(feature_cols),
-    #     "train_time_s":   ...,
-    #     "cv_r2":          model.cv_r2_ if hasattr else None,
-    #     "metrics":        metrics_dict,
-    #     "y_pred_test":    y_pred_test.tolist(),
-    #     "y_true_test":    y_test.tolist(),
-    #   }
-    # TODO: RESULTS_DIR.mkdir(exist_ok=True)
-    # TODO: write JSON to RESULTS_DIR / f"{model.name}.json"
-    raise NotImplementedError
+    X_train, X_test, y_train, y_test = load_scalar(feature_cols=feature_cols)
+
+    t0 = time.perf_counter()
+    model.fit(X_train, y_train)
+    train_time_s = time.perf_counter() - t0
+
+    metrics = score(model, X_test, y_test, n_features=len(feature_cols))
+    cv_r2 = getattr(model, "cv_r2_", None)
+
+    print(f"  adj_r2            : {metrics['adj_r2']:.4f}")
+    print(f"  mae               : {metrics['mae']:.4f} g")
+    print(f"  rmse              : {metrics['rmse']:.4f} g")
+    print(f"  max_overpredict   : {metrics['max_overpredict']:.4f} g")
+    print(f"  mos_01            : {metrics['mos_01']:.4f} g")
+    print(f"  inference_time_ms : {metrics['inference_time_ms']:.3f} ms")
+    if cv_r2 is not None:
+        print(f"  cv_r2 (10-fold)   : {cv_r2:.4f}")
+    print(f"  train_time_s      : {train_time_s:.2f} s")
+
+    fi = getattr(model, "feature_importances_", None)
+    if fi is not None:
+        top10 = np.argsort(fi)[::-1][:10]
+        print("\n  Top-10 feature importances:")
+        for rank, idx in enumerate(top10, 1):
+            print(f"    {rank:2d}. {feature_cols[idx]:40s}  {fi[idx]:.4f}")
+
+    y_pred_test = model.predict(X_test)
+
+    results = {
+        "model":        model.name,
+        "feature_set":  feature_cols,
+        "n_features":   len(feature_cols),
+        "train_time_s": train_time_s,
+        "cv_r2":        cv_r2,
+        "metrics":      metrics,
+        "y_pred_test":  y_pred_test.tolist(),
+        "y_true_test":  y_test.tolist(),
+    }
+
+    RESULTS_DIR.mkdir(exist_ok=True)
+    out_path = RESULTS_DIR / f"{model.name}.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\n  Saved → {out_path}")
 
 
 def main(args) -> None:

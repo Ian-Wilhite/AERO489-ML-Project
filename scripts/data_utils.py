@@ -25,8 +25,8 @@ TARGET = "g_limit"
 
 # ── Feature set constants ─────────────────────────────────────────────────────
 
-# 7 hand-crafted features (proposal §4.1 A/B/C); n_steps removed (sim artifact)
-ENGINEERED_COLS = [
+# Hand-crafted features (proposal §4.1 A/B/C + D inverse/sqrt + E log/exp transforms)
+_BASE_ENGINEERED = [
     "tip_deflection_slope",
     "tip_per_g_at_failure",
     "avg_strain_at_failure",
@@ -34,7 +34,28 @@ ENGINEERED_COLS = [
     "strain_energy_at_failure",
     "strain_energy_slope",
     "k_spring",
+    # Feature D: inverse and sqrt transforms
+    "inv_tip_per_g_at_failure",
+    "inv_tip_deflection_slope",
+    "inv_max_vm_stress_at_failure",
+    "sqrt_strain_energy_at_failure",
 ]
+
+# log/exp transforms valid for all 12 base features (no overflow)
+_LN_ENGINEERED    = [f"ln_{c}"    for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
+_LOG10_ENGINEERED = [f"log10_{c}" for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
+
+# exp/pow10 applied to min-max normalised features -> [1,e] and [1,10], no overflow
+_EXP_ENGINEERED   = [f"exp_{c}"   for c in _BASE_ENGINEERED]
+_POW10_ENGINEERED = [f"pow10_{c}" for c in _BASE_ENGINEERED]
+
+ENGINEERED_COLS = (
+    _BASE_ENGINEERED
+    + _LN_ENGINEERED
+    + _LOG10_ENGINEERED
+    + _EXP_ENGINEERED
+    + _POW10_ENGINEERED
+)
 
 # Non-gauge columns that should never be treated as raw gauge readings
 _META_COLS = {
