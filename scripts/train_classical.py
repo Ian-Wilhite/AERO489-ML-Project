@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-from data_utils import load_scalar, ENGINEERED_COLS, ALL_SCALAR_COLS
+from data_utils import load_scalar, ENGINEERED_COLS, ALL_SCALAR_COLS, BOXCOX_COLS, BOXCOX_COLS_LR
 from evaluate import score
 
 # ── Model registry ────────────────────────────────────────────────────────────
@@ -42,9 +42,9 @@ def _build_registry() -> dict:
     from models.random_forest import RandomForest
 
     return {
-        "lr":   (LinearReg(),    ENGINEERED_COLS),
-        "poly": (PolyReg(),      ENGINEERED_COLS),
-        "gpr":  (GPR(),          ALL_SCALAR_COLS),
+        "lr":   (LinearReg(),    BOXCOX_COLS_LR),
+        "poly": (PolyReg(),      BOXCOX_COLS),
+        "gpr":  (GPR(),          BOXCOX_COLS),
         "rf":   (RandomForest(), ALL_SCALAR_COLS),
     }
 
@@ -85,6 +85,14 @@ def train_and_save(short_name: str, model, feature_cols: list[str]) -> None:
 
     y_pred_test = model.predict(X_test)
 
+    # Extract linear model coefficients if available (for interpretability plots)
+    coef_dict = None
+    pipeline = getattr(model, "_pipeline", None)
+    if pipeline is not None:
+        lr_step = pipeline.named_steps.get("lr") or pipeline.named_steps.get("ridge")
+        if lr_step is not None and hasattr(lr_step, "coef_"):
+            coef_dict = dict(zip(feature_cols, lr_step.coef_.tolist()))
+
     results = {
         "model":        model.name,
         "feature_set":  feature_cols,
@@ -95,6 +103,8 @@ def train_and_save(short_name: str, model, feature_cols: list[str]) -> None:
         "y_pred_test":  y_pred_test.tolist(),
         "y_true_test":  y_test.tolist(),
     }
+    if coef_dict is not None:
+        results["coefficients"] = coef_dict
 
     RESULTS_DIR.mkdir(exist_ok=True)
     out_path = RESULTS_DIR / f"{model.name}.json"

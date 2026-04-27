@@ -49,12 +49,33 @@ _LOG10_ENGINEERED = [f"log10_{c}" for c in _BASE_ENGINEERED + ["max_vm_stress_at
 _EXP_ENGINEERED   = [f"exp_{c}"   for c in _BASE_ENGINEERED]
 _POW10_ENGINEERED = [f"pow10_{c}" for c in _BASE_ENGINEERED]
 
+# Box-Cox optimal power transform (x^λ*) per feature — maximises univariate R² with g_limit
+_BOXCOX_ENGINEERED = [f"boxcox_{c}" for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
+
+# 12 Box-Cox features only — one optimally-transformed column per base input, no redundancy.
+# Best feature set for linear models and GPR: pre-linearised, no collinear log pairs.
+BOXCOX_COLS = _BOXCOX_ENGINEERED
+
+# 11 Box-Cox features for linear regression — drops sqrt_strain_energy which is
+# nearly collinear with strain_energy (both derived from the same quantity),
+# inflating their coefficients and obscuring physical interpretation.
+_BOXCOX_LR_DROP = {
+    "boxcox_sqrt_strain_energy_at_failure",  # collinear with boxcox_strain_energy
+    "boxcox_inv_tip_per_g_at_failure",       # mathematically identical to boxcox_tip_per_g (x^-7 == (1/x)^7)
+    "boxcox_inv_tip_deflection_slope",       # mathematically identical to boxcox_k_spring
+    "boxcox_tip_deflection_slope",           # mathematically identical to boxcox_k_spring (keep k_spring)
+    "boxcox_tip_per_g_at_failure",           # near-collinear with k_spring; k_spring kept as more generic
+    "boxcox_inv_max_vm_stress_at_failure",   # redundant with boxcox_max_vm_stress
+}
+BOXCOX_COLS_LR = [c for c in BOXCOX_COLS if c not in _BOXCOX_LR_DROP]
+
 ENGINEERED_COLS = (
     _BASE_ENGINEERED
     + _LN_ENGINEERED
     + _LOG10_ENGINEERED
     + _EXP_ENGINEERED
     + _POW10_ENGINEERED
+    + _BOXCOX_ENGINEERED
 )
 
 # Non-gauge columns that should never be treated as raw gauge readings
