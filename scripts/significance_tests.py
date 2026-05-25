@@ -2,9 +2,9 @@
 AERO 489 — Statistical significance tests + conservative prediction rate.
 
 Produces:
-  figures-v2/wilcoxon_pvalue.png    — 7×7 heatmap of Wilcoxon p-values (|error| pairs)
-  figures-v2/wilcoxon_wins.png      — win/tie/loss matrix (which model is better)
-  figures-v2/conservative_rate.png  — bar chart: fraction of conservative predictions per model
+  figures/v2/wilcoxon_pvalue.png    — 7×7 heatmap of Wilcoxon p-values (|error| pairs)
+  figures/v2/wilcoxon_wins.png      — win/tie/loss matrix (which model is better)
+  figures/v2/conservative_rate.png  — bar chart: fraction of conservative predictions per model
 
 Console output:
   - Friedman test result (is there any significant difference across all models?)
@@ -34,7 +34,7 @@ sns.set_theme(style="whitegrid", font_scale=1.05)
 
 ROOT        = Path(__file__).resolve().parent.parent
 RESULTS_DIR = ROOT / "results"
-FIGURES_DIR = ROOT / "figures-v2"
+FIGURES_DIR = ROOT / "figures/v2"
 FIGURES_DIR.mkdir(exist_ok=True)
 
 ALPHA = 0.05

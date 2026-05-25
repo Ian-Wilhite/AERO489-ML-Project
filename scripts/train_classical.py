@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-from data_utils import load_scalar, ENGINEERED_COLS, ALL_SCALAR_COLS, BOXCOX_COLS, BOXCOX_COLS_LR
+from data_utils import load_scalar, ENGINEERED_COLS, ALL_SCALAR_COLS, BOXCOX_COLS, BOXCOX_COLS_LR, GREEDY_8_COLS, RF_NN_COLS
 from evaluate import score
 
 # ── Model registry ────────────────────────────────────────────────────────────
@@ -42,10 +42,10 @@ def _build_registry() -> dict:
     from models.random_forest import RandomForest
 
     return {
-        "lr":   (LinearReg(),    BOXCOX_COLS_LR),
+        "lr":   (LinearReg(),    GREEDY_8_COLS),
         "poly": (PolyReg(),      BOXCOX_COLS),
         "gpr":  (GPR(),          BOXCOX_COLS),
-        "rf":   (RandomForest(), ALL_SCALAR_COLS),
+        "rf":   (RandomForest(), RF_NN_COLS),
     }
 
 

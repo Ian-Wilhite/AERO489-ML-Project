@@ -1,0 +1,31 @@
+Version: v2b  |  features: features-v2b/features_scalar.parquet  |  figures: figures-v2b
+Saved fig_01_target_dist.png
+Saved fig_02_engineered_dist.png
+Saved fig_03_raw_strain_dist.png
+Saved fig_04_engineered_scatter.png
+Saved fig_05_raw_strain_scatter.png
+Saved fig_06_predictive_summary.png
+
+All figures written to figures/
+Version: v2b  |  parquet: features-v2b/features_scalar.parquet  |  out: figures-v2b
+Traceback (most recent call last):
+  File "/home/ianw/Github/Courses/AERO489-Proj/scripts/correlation_matrix.py", line 38, in <module>
+    df = df.rename(rename)
+         ^^^^^^^^^^^^^^^^^
+  File "/home/ianw/Github/Courses/AERO489-Proj/.venv/lib/python3.12/site-packages/polars/dataframe/frame.py", line 5263, in rename
+    .collect(optimizations=QueryOptFlags._eager())
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ianw/Github/Courses/AERO489-Proj/.venv/lib/python3.12/site-packages/polars/_utils/deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ianw/Github/Courses/AERO489-Proj/.venv/lib/python3.12/site-packages/polars/lazyframe/opt_flags.py", line 343, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ianw/Github/Courses/AERO489-Proj/.venv/lib/python3.12/site-packages/polars/lazyframe/frame.py", line 2510, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+polars.exceptions.DuplicateError: column 'N_-0.280000001192093, ' is duplicate
+Version: v2b  |  parquet: features-v2b/features_scalar.parquet  |  out: figures-v2b
+Saved → figures-v2b/correlation_matrix.png
+Version: v2b  |  parquet: features-v2b/features_scalar.parquet  |  out: figures-v2b
+Saved → figures-v2b/correlation_matrix.png

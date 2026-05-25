@@ -3,21 +3,19 @@ AERO 489 — Model 6: Physics-Informed Neural Network (PINN)
 
 Same MLP as FeedforwardNN + a normalised physics residual term in the loss.
 
-Three physics models (select via physics_model argument):
-  "hooke_strain"  — RF = K1 × avg_strain          (linear elastic, Hooke's law)
-  "energy_quad"   — RF² = K2 × strain_energy       (U ∝ F² in elastic regime)
-  "energy_rate"   — RF = K3 × strain_energy_slope  (Castigliano: dU/dF = tip_deflection ∝ RF/k)
+Physics model (energy_rate):
+  RF = K × strain_energy_slope  (Castigliano: dU/dF = tip_deflection ∝ RF/k)
+
+The "hooke_strain" and "energy_quad" options have been removed because they
+relied on at-failure snapshots (avg_strain_at_failure, strain_energy_at_failure)
+which are not available during pre-failure flight.  energy_rate uses
+strain_energy_slope, a rate feature computable from any flight data.
 
 Each residual is normalised by the training-set std of the reference feature so
 that lambda is a dimensionless weight comparable across models:
 
   physics_loss = mean( ((residual) / feat_std)² )
   total_loss   = data_mse + lambda_physics × physics_loss
-
-Feature indices in ALL_SCALAR_COLS (ENGINEERED_COLS block):
-  2 → avg_strain_at_failure
-  4 → strain_energy_at_failure
-  5 → strain_energy_slope
 """
 
 import numpy as np
@@ -36,11 +34,10 @@ AIRCRAFT_MASS_KG = 16_500.0
 G_ACCEL          = 9.81
 _HALF_WEIGHT     = AIRCRAFT_MASS_KG * G_ACCEL / 2.0   # converts g_limit → RF [N]
 
-# Feature index within ALL_SCALAR_COLS for each physics model
-_PHYS_CFG = {
-    "hooke_strain": 2,   # avg_strain_at_failure
-    "energy_quad":  4,   # strain_energy_at_failure
-    "energy_rate":  5,   # strain_energy_slope
+# Maps physics_model name to the required feature column.
+# Index resolved at fit() time from the actual feature list passed.
+_PHYS_FEAT = {
+    "energy_rate": "strain_energy_slope",
 }
 
 
@@ -54,14 +51,18 @@ class PINN(WingModel):
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
         lambda_physics: float = 0.1,
-        physics_model: str = "hooke_strain",
+        physics_model: str = "energy_rate",
         epochs: int = 500,
         batch_size: int = 64,
         patience: int = 40,
         seed: int = 42,
     ):
-        if physics_model not in _PHYS_CFG:
-            raise ValueError(f"physics_model must be one of {list(_PHYS_CFG)}")
+        if physics_model not in _PHYS_FEAT:
+            raise ValueError(
+                f"physics_model must be 'energy_rate'. "
+                f"'hooke_strain' and 'energy_quad' were removed because they "
+                f"required at-failure features unavailable during normal flight."
+            )
         self.hidden         = hidden
         self.dropout        = dropout
         self.lr             = lr
@@ -74,64 +75,54 @@ class PINN(WingModel):
         self.seed           = seed
         self._scaler: StandardScaler | None = None
         self._model: _MLP | None = None
-        self._k:     float | None = None   # physics constant estimated from training data
+        self._k:        float | None = None   # physics constant estimated from training data
         self._feat_scale: float | None = None  # normalisation denominator
+        self._feat_idx:   int   | None = None  # column index resolved at fit() time
         self.train_loss_history_: list[float] = []
         self.val_loss_history_: list[float] = []
 
     # ── Physics setup ─────────────────────────────────────────────────────────
 
-    def _setup_physics(self, X_raw: np.ndarray, y_train: np.ndarray) -> None:
+    def _setup_physics(self, X_raw: np.ndarray, y_train: np.ndarray,
+                       feature_cols: list[str]) -> None:
         """Estimate the physics constant K and normalisation scale from training data."""
-        feat_idx = _PHYS_CFG[self.physics_model]
+        feat_name = _PHYS_FEAT[self.physics_model]
+        if feat_name not in feature_cols:
+            raise ValueError(
+                f"Physics feature '{feat_name}' not found in feature_cols. "
+                f"PINN requires the base engineered features; use PINN_COLS."
+            )
+        self._feat_idx = feature_cols.index(feat_name)
+        feat_idx = self._feat_idx
         RF       = y_train * _HALF_WEIGHT
         feat     = X_raw[:, feat_idx]
 
-        if self.physics_model == "hooke_strain":
-            # RF = K × avg_strain  →  K = Σ(RF·ε) / Σ(ε²)  (OLS through origin)
-            self._k = float(np.dot(RF, feat) / np.dot(feat, feat))
-            residual = RF / self._k - feat
-
-        elif self.physics_model == "energy_quad":
-            # RF² = K × strain_energy  →  K = Σ(RF²·U) / Σ(U²)
-            self._k = float(np.dot(RF**2, feat) / np.dot(feat, feat))
-            residual = RF**2 / self._k - feat
-
-        elif self.physics_model == "energy_rate":
-            # RF = K × dU/dRF  →  K = Σ(RF·slope) / Σ(slope²)
-            self._k = float(np.dot(RF, feat) / np.dot(feat, feat))
-            residual = RF / self._k - feat
+        # energy_rate: RF = K × dU/dRF  →  K = Σ(RF·slope) / Σ(slope²)
+        self._k  = float(np.dot(RF, feat) / np.dot(feat, feat))
+        residual = RF / self._k - feat
 
         self._feat_scale = float(np.std(feat)) + 1e-12
         print(f"    [{self.physics_model}]  K={self._k:.3e}  "
               f"residual_std={np.std(residual):.3e}  feat_std={self._feat_scale:.3e}")
 
-    def _phys_residual(
-        self,
-        g_pred: torch.Tensor,
-        feat_batch: torch.Tensor,
-    ) -> torch.Tensor:
-        """Normalised physics residual for the current batch."""
+    def _phys_residual(self, g_pred: torch.Tensor, feat_batch: torch.Tensor) -> torch.Tensor:
+        """Normalised energy_rate physics residual: (RF/K - slope) / feat_std."""
         RF = g_pred * _HALF_WEIGHT
-        k  = self._k
-        s  = self._feat_scale
-
-        if self.physics_model == "hooke_strain":
-            return (RF / k - feat_batch) / s
-        elif self.physics_model == "energy_quad":
-            return (RF**2 / k - feat_batch) / s
-        else:  # energy_rate
-            return (RF / k - feat_batch) / s
+        return (RF / self._k - feat_batch) / self._feat_scale
 
     # ── Training ──────────────────────────────────────────────────────────────
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray,
+            feature_cols: list[str] | None = None) -> None:
         torch.manual_seed(self.seed)
 
-        self._setup_physics(X_train, y_train)
+        if feature_cols is None:
+            # Backward-compatible fallback: assume _BASE_ENGINEERED ordering
+            from data_utils import _BASE_ENGINEERED
+            feature_cols = _BASE_ENGINEERED
+        self._setup_physics(X_train, y_train, feature_cols)
 
-        feat_idx      = _PHYS_CFG[self.physics_model]
-        raw_feat      = X_train[:, feat_idx].copy()
+        raw_feat = X_train[:, self._feat_idx].copy()
 
         self._scaler  = StandardScaler()
         X_scaled      = self._scaler.fit_transform(X_train)

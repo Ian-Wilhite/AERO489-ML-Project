@@ -36,7 +36,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 RESULTS_DIR = _root / "results"
-FIGURES_DIR = _root / "figures-v2"
+FIGURES_DIR = _root / "figures/v2"
 
 # §6.2 success thresholds
 THRESHOLDS = {

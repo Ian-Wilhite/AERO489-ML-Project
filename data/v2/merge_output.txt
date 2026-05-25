@@ -1,0 +1,4 @@
+Scalar  → features-v2/features_scalar.parquet  shape=(468, 36)
+g_limit range: 0.093 – 3.359 g
+TimeSeries → features-v2/time_series.parquet  shape=(7260, 31)
+Unique sims: 479, total steps: 7260

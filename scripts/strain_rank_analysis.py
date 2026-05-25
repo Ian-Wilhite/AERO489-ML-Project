@@ -10,7 +10,7 @@ Right panel : fixed-node (unordered) boxplots, per-node R² on a dual right axis
 The side-by-side contrast shows that within-simulation rank ordering alone
 creates the structured, monotone signal seen in the left panel.
 
-Output: figures-v2/strain_gauge_rank_analysis.png
+Output: figures/v2/strain_gauge_rank_analysis.png
 """
 
 from pathlib import Path
@@ -29,9 +29,9 @@ from sklearn.metrics import r2_score
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT           = Path(__file__).resolve().parent.parent
-SCALAR_PARQUET = ROOT / "features-v2" / "features_scalar.parquet"
+SCALAR_PARQUET = ROOT / "features/v2" / "features_scalar.parquet"
 TARGET         = "g_limit"
-OUT            = ROOT / "figures-v2" / "strain_gauge_rank_analysis.png"
+OUT            = ROOT / "figures/v2" / "strain_gauge_rank_analysis.png"
 
 # ── 1. Load ────────────────────────────────────────────────────────────────────
 df        = pl.read_parquet(SCALAR_PARQUET)

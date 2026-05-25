@@ -37,7 +37,7 @@ sns.set_theme(style="whitegrid", font_scale=1.05)
 
 ROOT        = Path(__file__).resolve().parent.parent
 RESULTS_DIR = ROOT / "results"
-FIGURES_DIR = ROOT / "figures-v2"
+FIGURES_DIR = ROOT / "figures/v2"
 FIGURES_DIR.mkdir(exist_ok=True)
 
 # ── model metadata ────────────────────────────────────────────────────────────
@@ -308,16 +308,32 @@ def fig_safety_bars():
 
 
 # ── Fig 08 — Pareto: R² vs inference time ─────────────────────────────────────
-def fig_pareto_time():
+def fig_pareto_time(subset=None, suffix=""):
+    """subset: list of model key strings to include; None = all."""
+    models = [r for r in MODELS if subset is None or r["model"] in subset]
     fig, ax = plt.subplots(figsize=(8, 5.5))
 
-    for r in MODELS:
+    times = [r["metrics"]["inference_time_ms"] for r in models]
+    r2s   = [r["metrics"]["adj_r2"]            for r in models]
+    x_max = max(times) * 6
+    y_min = min(r2s) - 0.08
+
+    from matplotlib.patches import Rectangle
+    for r in models:
+        m = r["metrics"]
+        x0 = m["inference_time_ms"]
+        rect = Rectangle((x0, y_min), x_max - x0, m["adj_r2"] - y_min,
+                          linewidth=0, facecolor=r["color"], alpha=0.08, zorder=1)
+        ax.add_patch(rect)
+        ax.plot([x0, x0, x_max], [m["adj_r2"], y_min, y_min],
+                color=r["color"], linewidth=0.7, linestyle="--", alpha=0.35, zorder=2)
+
+    for r in models:
         m   = r["metrics"]
         mk  = "o" if r["model"] in {"feedforward_nn","pinn","deep_learning_lstm"} else "s"
         ax.scatter(m["inference_time_ms"], m["adj_r2"],
                    color=r["color"], s=130, zorder=5, marker=mk,
                    edgecolors="white", linewidths=0.8)
-        # offset labels to avoid overlap
         offsets = {
             "Linear Reg.":   (6, -10),
             "Poly Reg.":     (6,   4),
@@ -332,9 +348,6 @@ def fig_pareto_time():
                     xytext=(dx, dy), textcoords="offset points",
                     fontsize=9, color=r["color"])
 
-    _threshold_line(ax, THRESHOLD_R2, f"R²={THRESHOLD_R2} pass threshold", "grey", ":")
-
-    # legend: shape legend only
     from matplotlib.lines import Line2D
     legend_els = [
         Line2D([0],[0], marker="s", color="w", markerfacecolor="grey", ms=9, label="Classical"),
@@ -347,15 +360,30 @@ def fig_pareto_time():
     ax.set_ylabel("Adjusted R²  (higher = better)")
     ax.set_title("Pareto Front — Accuracy vs Inference Speed")
     fig.tight_layout()
-    _save(fig, "pareto_r2_vs_time.png")
+    _save(fig, f"pareto_r2_vs_time{suffix}.png")
 
 
 # ── Fig 09 — Pareto: R² vs interpretability ───────────────────────────────────
-def fig_pareto_interp():
+def fig_pareto_interp(subset=None, suffix=""):
+    """subset: list of model key strings to include; None = all."""
     meta_map = {name: (interp, group) for name, _, _, interp, group in MODEL_META}
+    models   = [r for r in MODELS if subset is None or r["model"] in subset]
     fig, ax  = plt.subplots(figsize=(9, 5.5))
 
-    for r in MODELS:
+    r2s   = [r["metrics"]["adj_r2"] for r in models]
+    x_min = 0.5
+    y_min = min(r2s) - 0.08
+
+    from matplotlib.patches import Rectangle
+    for r in models:
+        interp, group = meta_map[r["model"]]
+        rect = Rectangle((x_min, y_min), interp - x_min, r["metrics"]["adj_r2"] - y_min,
+                          linewidth=0, facecolor=r["color"], alpha=0.08, zorder=1)
+        ax.add_patch(rect)
+        ax.plot([x_min, interp, interp], [r["metrics"]["adj_r2"], r["metrics"]["adj_r2"], y_min],
+                color=r["color"], linewidth=0.7, linestyle="--", alpha=0.35, zorder=2)
+
+    for r in models:
         interp, group = meta_map[r["model"]]
         mk = "o" if group == "modern" else "s"
         ax.scatter(interp, r["metrics"]["adj_r2"],
@@ -375,8 +403,6 @@ def fig_pareto_interp():
                     xytext=(dx, dy), textcoords="offset points",
                     ha="center", fontsize=9, color=r["color"])
 
-    _threshold_line(ax, THRESHOLD_R2, f"R²={THRESHOLD_R2} pass threshold", "grey", ":")
-
     xtick_positions = [1.0, 2.0, 3.0, 4.0, 5.0]
     xtick_labels    = ["None", "Partial", "Physics-\ninformed", "Probabilistic", "Fully\nexplicit"]
     ax.set_xticks(xtick_positions)
@@ -394,7 +420,7 @@ def fig_pareto_interp():
     ax.set_ylabel("Adjusted R²")
     ax.set_title("Pareto Front — Accuracy vs Interpretability")
     fig.tight_layout()
-    _save(fig, "pareto_r2_vs_interp.png")
+    _save(fig, f"pareto_r2_vs_interp{suffix}.png")
 
 
 # ── Fig 10 — Per-sample NN vs PINN comparison ────────────────────────────────
@@ -567,6 +593,9 @@ if __name__ == "__main__":
     fig_safety_bars()
     fig_pareto_time()
     fig_pareto_interp()
+    _top3 = {"linear_regression", "polynomial_regression", "gaussian_process_regression"}
+    fig_pareto_time(subset=_top3, suffix="_top3")
+    fig_pareto_interp(subset=_top3, suffix="_top3")
     fig_nn_vs_pinn()
     fig_ablation_heatmap()
     fig_ablation_lambda_curves()

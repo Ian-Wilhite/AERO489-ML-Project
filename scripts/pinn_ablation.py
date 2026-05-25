@@ -6,7 +6,7 @@ Trains one PINN per (physics_model, lambda) combination and records test metrics
 3 physics models × 10 lambda values = 30 runs.
 Results saved to:
   results/pinn_ablation.csv
-  figures-v2/pinn_ablation.png
+  figures/v2/pinn_ablation.png
 """
 
 import sys
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from data_utils import load_scalar, ALL_SCALAR_COLS
+from data_utils import load_scalar, PINN_COLS
 from evaluate import adjusted_r2, rmse, mae, mos_01
 
 PHYSICS_MODELS = {
@@ -39,7 +39,7 @@ PHYSICS_MODELS = {
 LAMBDAS = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0]
 
 RESULTS_DIR = _root / "results"
-FIGURES_DIR = _root / "figures-v2"
+FIGURES_DIR = _root / "figures/v2"
 RESULTS_DIR.mkdir(exist_ok=True)
 FIGURES_DIR.mkdir(exist_ok=True)
 
@@ -47,8 +47,8 @@ FIGURES_DIR.mkdir(exist_ok=True)
 def run_ablation() -> pd.DataFrame:
     from models.pinn import PINN
 
-    X_train, X_test, y_train, y_test = load_scalar(feature_cols=ALL_SCALAR_COLS)
-    n_feat = len(ALL_SCALAR_COLS)
+    X_train, X_test, y_train, y_test = load_scalar(feature_cols=PINN_COLS)
+    n_feat = len(PINN_COLS)
 
     records = []
     total   = len(PHYSICS_MODELS) * len(LAMBDAS)
@@ -67,7 +67,7 @@ def run_ablation() -> pd.DataFrame:
                 seed=42,
             )
             t0 = time.time()
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train, feature_cols=PINN_COLS)
             elapsed = time.time() - t0
 
             y_pred  = model.predict(X_test)

@@ -17,7 +17,7 @@ import polars as pl
 from sklearn.model_selection import train_test_split
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-FEATURES_DIR   = Path(__file__).resolve().parent.parent / "features-v2"
+FEATURES_DIR   = Path(__file__).resolve().parent.parent / "features/v2"
 SCALAR_PARQUET = FEATURES_DIR / "features_scalar.parquet"
 TS_PARQUET     = FEATURES_DIR / "time_series.parquet"
 
@@ -25,49 +25,50 @@ TARGET = "g_limit"
 
 # ── Feature set constants ─────────────────────────────────────────────────────
 
-# Hand-crafted features (proposal §4.1 A/B/C + D inverse/sqrt + E log/exp transforms)
+# Slope-based features — rates of change per Newton of applied load.
+# All computable from pre-failure flight data (no at-failure state required).
 _BASE_ENGINEERED = [
-    "tip_deflection_slope",
-    "tip_per_g_at_failure",
-    "avg_strain_at_failure",
-    "avg_strain_slope",
-    "strain_energy_at_failure",
-    "strain_energy_slope",
-    "k_spring",
-    # Feature D: inverse and sqrt transforms
-    "inv_tip_per_g_at_failure",
-    "inv_tip_deflection_slope",
-    "inv_max_vm_stress_at_failure",
-    "sqrt_strain_energy_at_failure",
+    "tip_deflection_slope",      # tip displacement rate [m/N]  — camera + IMU
+    "avg_strain_slope",          # mean gauge strain rate [strain/N]  — gauges + IMU
+    "strain_energy_slope",       # strain energy proxy rate [Pa/N]  — gauges + IMU
+    "k_spring",                  # structural stiffness = 1/tip_slope [N/m]  — derived
+    "inv_tip_deflection_slope",  # = 1/tip_slope (alternative stiffness form)  — derived
 ]
 
-# log/exp transforms valid for all 12 base features (no overflow)
-_LN_ENGINEERED    = [f"ln_{c}"    for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
-_LOG10_ENGINEERED = [f"log10_{c}" for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
+# log/exp transforms for all 6 base slope features
+_LN_ENGINEERED    = [f"ln_{c}"    for c in _BASE_ENGINEERED]
+_LOG10_ENGINEERED = [f"log10_{c}" for c in _BASE_ENGINEERED]
 
 # exp/pow10 applied to min-max normalised features -> [1,e] and [1,10], no overflow
 _EXP_ENGINEERED   = [f"exp_{c}"   for c in _BASE_ENGINEERED]
 _POW10_ENGINEERED = [f"pow10_{c}" for c in _BASE_ENGINEERED]
 
 # Box-Cox optimal power transform (x^λ*) per feature — maximises univariate R² with g_limit
-_BOXCOX_ENGINEERED = [f"boxcox_{c}" for c in _BASE_ENGINEERED + ["max_vm_stress_at_failure"]]
+_BOXCOX_ENGINEERED = [f"boxcox_{c}" for c in _BASE_ENGINEERED]
 
-# 12 Box-Cox features only — one optimally-transformed column per base input, no redundancy.
-# Best feature set for linear models and GPR: pre-linearised, no collinear log pairs.
+# 6 Box-Cox features — one optimally-transformed column per base slope feature.
+# Best feature set for linear models and GPR: pre-linearised, no collinear pairs.
 BOXCOX_COLS = _BOXCOX_ENGINEERED
 
-# 11 Box-Cox features for linear regression — drops sqrt_strain_energy which is
-# nearly collinear with strain_energy (both derived from the same quantity),
-# inflating their coefficients and obscuring physical interpretation.
+# Reduced Box-Cox set for linear regression — drops features that are mathematically
+# redundant (inv_tip_deflection_slope = 1/tip_slope, so their boxcox transforms are
+# equivalent up to sign; keep k_spring which is the more physically interpretable form).
 _BOXCOX_LR_DROP = {
-    "boxcox_sqrt_strain_energy_at_failure",  # collinear with boxcox_strain_energy
-    "boxcox_inv_tip_per_g_at_failure",       # mathematically identical to boxcox_tip_per_g (x^-7 == (1/x)^7)
-    "boxcox_inv_tip_deflection_slope",       # mathematically identical to boxcox_k_spring
-    "boxcox_tip_deflection_slope",           # mathematically identical to boxcox_k_spring (keep k_spring)
-    "boxcox_tip_per_g_at_failure",           # near-collinear with k_spring; k_spring kept as more generic
-    "boxcox_inv_max_vm_stress_at_failure",   # redundant with boxcox_max_vm_stress
+    "boxcox_inv_tip_deflection_slope",  # = 1/tip_slope → equivalent to boxcox_k_spring
+    "boxcox_tip_deflection_slope",      # same information as boxcox_k_spring
 }
 BOXCOX_COLS_LR = [c for c in BOXCOX_COLS if c not in _BOXCOX_LR_DROP]
+
+# Rank-ordered strain gauge slope features (5 scalars).
+# Gauge slopes (strain rate per Newton) are sorted and three percentile positions
+# are extracted.  Gompertz shape params encode the rank-profile shape compactly.
+RANKED_STRAIN_COLS = [
+    "ranked_strain_p04",   # ~17th-percentile gauge slope  (low-end sensitivity)
+    "ranked_strain_p23",   # ~96th-percentile gauge slope  (near-peak sensitivity)
+    "ranked_strain_p24",   # maximum gauge slope
+    "gompertz_log_b",      # log(b): Gompertz initial suppression on log scale
+    "gompertz_c",          # Gompertz growth-rate across slope ranks
+]
 
 ENGINEERED_COLS = (
     _BASE_ENGINEERED
@@ -78,18 +79,19 @@ ENGINEERED_COLS = (
     + _BOXCOX_ENGINEERED
 )
 
-# Non-gauge columns that should never be treated as raw gauge readings
+# Non-gauge columns that should never be treated as raw gauge slope readings
 _META_COLS = {
     "sim_id", "n_steps", "RF_failure", "g_limit",
-    "tip_deflection_at_failure", "max_vm_stress_at_failure",
-} | set(ENGINEERED_COLS)
+} | set(ENGINEERED_COLS) | set(RANKED_STRAIN_COLS)
 
 
 def _read_gauge_cols() -> list[str]:
-    """Auto-detect node/_failure columns from the scalar parquet header."""
+    """Auto-detect per-gauge slope columns from the scalar parquet header."""
     try:
         schema = pl.read_parquet_schema(SCALAR_PARQUET)
-        return [c for c in schema if c.endswith("_failure") and c not in _META_COLS]
+        return [c for c in schema
+                if c.startswith("Node_at_") and c.endswith("_slope")
+                and c not in _META_COLS]
     except Exception:
         return []
 
@@ -105,7 +107,30 @@ def _read_ts_feature_cols() -> list[str]:
 
 
 RAW_GAUGE_COLS  = _read_gauge_cols()
-ALL_SCALAR_COLS = ENGINEERED_COLS + RAW_GAUGE_COLS
+ALL_SCALAR_COLS = ENGINEERED_COLS + RAW_GAUGE_COLS + RANKED_STRAIN_COLS
+
+# ── Curated model-specific feature sets ───────────────────────────────────────
+
+# Greedy-forward-selection (Box-Cox + ranked strain pool, CV peaks at k=1).
+# CV is flat in the 0.84–0.85 range across all k; k=4 chosen as a practical
+# multi-feature set that is still interpretable for Linear Reg.
+GREEDY_8_COLS = [
+    "boxcox_strain_energy_slope",   # k=1  CV=0.661
+    "ranked_strain_p23",            # k=2  CV=0.844
+    "ranked_strain_p24",            # k=3  CV=0.856
+    "gompertz_c",                   # k=4  CV=0.879
+    "gompertz_log_b",               # k=5  CV=0.885
+    "boxcox_k_spring",              # k=6  CV=0.894 ← CV peak
+]
+
+# Physics-accessible feature set for PINN: base slope features so the
+# physics-residual lookup by column name is stable.
+# Ranked strain appended at the end adds gauge-level signal.
+PINN_COLS = _BASE_ENGINEERED + RANKED_STRAIN_COLS  # 11 features
+
+# Best compact set for RF and FFNN: Box-Cox pre-linearised features plus
+# rank-ordered gauge signal.  No redundant ln/log10/exp/pow10 transform families.
+RF_NN_COLS = BOXCOX_COLS + RANKED_STRAIN_COLS  # 11 features
 
 TS_FEATURE_COLS = _read_ts_feature_cols()
 MAX_SEQ_LEN     = 29  # verified from v2 data

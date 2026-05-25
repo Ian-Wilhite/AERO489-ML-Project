@@ -13,6 +13,7 @@ Cross-validation       : 5-fold inner CV for tuning; 10-fold outer CV for R² re
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV, cross_val_score, KFold
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from .base import WingModel
@@ -39,6 +40,12 @@ class RandomForest(WingModel):
         self._model: RandomForestRegressor | None = None
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
+        # StandardScaler prevents float32 overflow for Box-Cox features with
+        # extreme numerical ranges (e.g. boxcox_k_spring ∈ [5e33, 1e39]).
+        # RF splits are rank-based so scaling does not change the tree structure.
+        self._scaler = StandardScaler()
+        X_scaled = self._scaler.fit_transform(X_train)
+
         grid_search = GridSearchCV(
             RandomForestRegressor(random_state=self.seed),
             self.param_grid,
@@ -46,17 +53,17 @@ class RandomForest(WingModel):
             scoring="r2",
             n_jobs=-1,
         )
-        grid_search.fit(X_train, y_train)
+        grid_search.fit(X_scaled, y_train)
         self.best_params_ = grid_search.best_params_
 
         best_rf = RandomForestRegressor(**self.best_params_, random_state=self.seed)
         cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
-        scores = cross_val_score(best_rf, X_train, y_train, cv=cv, scoring="r2")
+        scores = cross_val_score(best_rf, X_scaled, y_train, cv=cv, scoring="r2")
         self.cv_r2_ = float(scores.mean())
 
         self._model = RandomForestRegressor(**self.best_params_, random_state=self.seed)
-        self._model.fit(X_train, y_train)
+        self._model.fit(X_scaled, y_train)
         self.feature_importances_ = self._model.feature_importances_
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        return self._model.predict(X)
+        return self._model.predict(self._scaler.transform(X))

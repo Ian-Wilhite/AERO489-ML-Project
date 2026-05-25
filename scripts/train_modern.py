@@ -31,11 +31,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from data_utils import load_scalar, load_timeseries, ALL_SCALAR_COLS
+from data_utils import load_scalar, load_timeseries, RF_NN_COLS, PINN_COLS
 from evaluate import score
 
 RESULTS_DIR = _root / "results"
-FIGURES_DIR = _root / "figures-v2"
+FIGURES_DIR = _root / "figures/v2"
 
 
 def _build_registry() -> dict:
@@ -44,9 +44,9 @@ def _build_registry() -> dict:
     from models.deep_learning  import DeepLearning
 
     return {
-        "nn":   (FeedforwardNN(), ALL_SCALAR_COLS, "scalar"),
-        "pinn": (PINN(),          ALL_SCALAR_COLS, "scalar"),
-        "lstm": (DeepLearning(),  None,            "timeseries"),
+        "nn":   (FeedforwardNN(), RF_NN_COLS,  "scalar"),
+        "pinn": (PINN(physics_model="energy_rate", lambda_physics=0.01), PINN_COLS, "scalar"),
+        "lstm": (DeepLearning(),  None,        "timeseries"),
     }
 
 
@@ -74,7 +74,12 @@ def train_scalar(model, feature_cols: list[str]) -> dict:
     print(f"  Data: {X_train.shape[0]} train / {X_test.shape[0]} test  |  {len(feature_cols)} features")
 
     t0 = time.time()
-    model.fit(X_train, y_train)
+    # Pass feature_cols to PINN so it can resolve physics indices by name
+    from models.pinn import PINN
+    if isinstance(model, PINN):
+        model.fit(X_train, y_train, feature_cols=feature_cols)
+    else:
+        model.fit(X_train, y_train)
     train_time = time.time() - t0
 
     metrics = score(model, X_test, y_test, n_features=len(feature_cols))

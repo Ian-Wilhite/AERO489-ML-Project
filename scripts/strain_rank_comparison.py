@@ -2,7 +2,7 @@
 """
 Strain gauge rank analysis — 5 interpolation/fitting methods compared.
 
-Generates one figure per method in figures-v2/spline_comparison/:
+Generates one figure per method in figures/v2/spline_comparison/:
   fig_01_logistic.png  — four-parameter logistic curve fit
   fig_02_cubic.png     — natural cubic spline through medians
   fig_03_pchip.png     — PCHIP monotone-preserving interpolant
@@ -37,9 +37,9 @@ from sklearn.metrics import r2_score
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT           = Path(__file__).resolve().parent.parent
-SCALAR_PARQUET = ROOT / "features-v2" / "features_scalar.parquet"
+SCALAR_PARQUET = ROOT / "features/v2" / "features_scalar.parquet"
 TARGET         = "g_limit"
-OUT_DIR        = ROOT / "figures-v2" / "spline_comparison"
+OUT_DIR        = ROOT / "figures/v2" / "spline_comparison"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── 1. Load ────────────────────────────────────────────────────────────────────
@@ -239,28 +239,28 @@ inv_log = make_brentq_inv(log_fn, min(y0l, y1l), max(y0l, y1l))
 make_figure("Logistic", log_fn, "Logistic curve", inv_log, OUT_DIR / "fig_01_logistic.png")
 
 # ── Method 2: Cubic Spline ──────────────────────────────────────────────────────
-print("\n[2/5] Cubic Spline")
+print("\n[2/11] Cubic Spline")
 cs_cub = CubicSpline(ranks, medians)
 y0c, y1c = float(cs_cub(ranks[0])), float(cs_cub(ranks[-1]))
 inv_cub = make_brentq_inv(cs_cub, min(y0c, y1c), max(y0c, y1c))
 make_figure("Cubic Spline", cs_cub, "Cubic spline", inv_cub, OUT_DIR / "fig_02_cubic.png")
 
 # ── Method 3: PCHIP ────────────────────────────────────────────────────────────
-print("\n[3/5] PCHIP")
+print("\n[3/11] PCHIP")
 cs_pch = PchipInterpolator(ranks, medians)
 y0p, y1p = float(cs_pch(ranks[0])), float(cs_pch(ranks[-1]))
 inv_pch = make_brentq_inv(cs_pch, min(y0p, y1p), max(y0p, y1p))
 make_figure("PCHIP", cs_pch, "PCHIP interpolant", inv_pch, OUT_DIR / "fig_03_pchip.png")
 
 # ── Method 4: Akima ────────────────────────────────────────────────────────────
-print("\n[4/5] Akima")
+print("\n[4/11] Akima")
 cs_aki = Akima1DInterpolator(ranks, medians)
 y0a, y1a = float(cs_aki(ranks[0])), float(cs_aki(ranks[-1]))
 inv_aki = make_brentq_inv(cs_aki, min(y0a, y1a), max(y0a, y1a))
 make_figure("Akima", cs_aki, "Akima spline", inv_aki, OUT_DIR / "fig_04_akima.png")
 
 # ── Method 5: B-Spline (LSQ regression spline) ────────────────────────────────
-print("\n[5/5] B-Spline (LSQ, 3 interior knots)")
+print("\n[5/11] B-Spline (LSQ, 3 interior knots)")
 k_deg   = 3
 t_knots = np.concatenate([
     [ranks[0]] * (k_deg + 1),
@@ -276,4 +276,131 @@ make_figure(
     inv_bspl, OUT_DIR / "fig_05_bspline.png",
 )
 
-print(f"\n✓ All 5 figures saved to {OUT_DIR}")
+# ── Method 6: Gompertz ────────────────────────────────────────────────────────
+print("\n[6/11] Gompertz")
+
+def _gompertz(x, a, b, c):
+    return a * np.exp(-b * np.exp(-c * x))
+
+p0 = [float(medians[-1] * 1.5), 10.0, 0.2]
+try:
+    popt_gom, _ = curve_fit(_gompertz, ranks, medians, p0=p0, maxfev=20000,
+                            bounds=([0, 0, 0], [np.inf, np.inf, np.inf]))
+    print(f"  a={popt_gom[0]:.3e}  b={popt_gom[1]:.4f}  c={popt_gom[2]:.4f}")
+except RuntimeError:
+    popt_gom = p0
+    print("  Warning: Gompertz fit did not converge, using initial guess")
+
+gom_fn = lambda x: _gompertz(x, *popt_gom)
+y0g, y1g = float(gom_fn(ranks[0])), float(gom_fn(ranks[-1]))
+inv_gom = make_brentq_inv(gom_fn, min(y0g, y1g), max(y0g, y1g))
+make_figure("Gompertz", gom_fn, "Gompertz curve", inv_gom, OUT_DIR / "fig_06_gompertz.png")
+
+# ── Method 7: Richards (Generalized Logistic) ─────────────────────────────────
+print("\n[7/11] Richards (Generalized Logistic)")
+
+def _richards(x, L, k, x0, v, b):
+    return L / (1 + np.exp(-k * (x - x0))) ** (1.0 / v) + b
+
+p0 = [float(medians[-1] - medians[0]), 0.2, float(G * 3), 0.5, float(medians[0])]
+try:
+    popt_ric, _ = curve_fit(_richards, ranks, medians, p0=p0, maxfev=20000,
+                            bounds=([0, 0, 0, 0.01, -np.inf],
+                                    [np.inf, np.inf, np.inf, np.inf, np.inf]))
+    print(f"  L={popt_ric[0]:.3e}  k={popt_ric[1]:.4f}  x0={popt_ric[2]:.3f}"
+          f"  v={popt_ric[3]:.4f}  b={popt_ric[4]:.3e}")
+except RuntimeError:
+    popt_ric = p0
+    print("  Warning: Richards fit did not converge, using initial guess")
+
+ric_fn = lambda x: _richards(x, *popt_ric)
+y0r, y1r = float(ric_fn(ranks[0])), float(ric_fn(ranks[-1]))
+inv_ric = make_brentq_inv(ric_fn, min(y0r, y1r), max(y0r, y1r))
+make_figure("Richards", ric_fn, "Richards / generalized logistic", inv_ric,
+            OUT_DIR / "fig_07_richards.png")
+
+# ── Method 8: Weibull CDF ─────────────────────────────────────────────────────
+print("\n[8/11] Weibull CDF")
+
+def _weibull(x, L, lam, k, b):
+    return L * (1.0 - np.exp(-(x / lam) ** k)) + b
+
+p0 = [float(medians[-1] - medians[0]), float(G / 2), 2.5, float(medians[0])]
+try:
+    popt_wei, _ = curve_fit(_weibull, ranks, medians, p0=p0, maxfev=20000,
+                            bounds=([0, 1e-6, 1e-6, -np.inf],
+                                    [np.inf, np.inf, np.inf, np.inf]))
+    print(f"  L={popt_wei[0]:.3e}  lam={popt_wei[1]:.4f}  k={popt_wei[2]:.4f}  b={popt_wei[3]:.3e}")
+except RuntimeError:
+    popt_wei = p0
+    print("  Warning: Weibull fit did not converge, using initial guess")
+
+wei_fn = lambda x: _weibull(x, *popt_wei)
+y0w, y1w = float(wei_fn(ranks[0])), float(wei_fn(ranks[-1]))
+inv_wei = make_brentq_inv(wei_fn, min(y0w, y1w), max(y0w, y1w))
+make_figure("Weibull CDF", wei_fn, "Weibull CDF", inv_wei, OUT_DIR / "fig_08_weibull.png")
+
+# ── Method 9: Power Law ───────────────────────────────────────────────────────
+print("\n[9/11] Power Law")
+
+def _powerlaw(x, a, b, c):
+    return a * x ** b + c
+
+p0 = [1e-4, 3.0, float(medians[0])]
+try:
+    popt_pow, _ = curve_fit(_powerlaw, ranks, medians, p0=p0, maxfev=20000,
+                            bounds=([0, 0, -np.inf], [np.inf, np.inf, np.inf]))
+    print(f"  a={popt_pow[0]:.3e}  b={popt_pow[1]:.4f}  c={popt_pow[2]:.3e}")
+except RuntimeError:
+    popt_pow = p0
+    print("  Warning: Power law fit did not converge, using initial guess")
+
+pow_fn = lambda x: _powerlaw(x, *popt_pow)
+y0pw, y1pw = float(pow_fn(ranks[0])), float(pow_fn(ranks[-1]))
+inv_pow = make_brentq_inv(pow_fn, min(y0pw, y1pw), max(y0pw, y1pw))
+make_figure("Power Law", pow_fn, "Power law  y = a·xᵇ + c", inv_pow,
+            OUT_DIR / "fig_09_powerlaw.png")
+
+# ── Method 10: Exponential ────────────────────────────────────────────────────
+print("\n[10/11] Exponential")
+
+def _exponential(x, a, b, c):
+    return a * np.exp(b * x) + c
+
+p0 = [1e-6, 0.4, float(medians[0])]
+try:
+    popt_exp, _ = curve_fit(_exponential, ranks, medians, p0=p0, maxfev=20000)
+    print(f"  a={popt_exp[0]:.3e}  b={popt_exp[1]:.4f}  c={popt_exp[2]:.3e}")
+except RuntimeError:
+    popt_exp = p0
+    print("  Warning: Exponential fit did not converge, using initial guess")
+
+exp_fn = lambda x: _exponential(x, *popt_exp)
+y0e, y1e = float(exp_fn(ranks[0])), float(exp_fn(ranks[-1]))
+inv_exp = make_brentq_inv(exp_fn, min(y0e, y1e), max(y0e, y1e))
+make_figure("Exponential", exp_fn, "Exponential  y = a·eᵇˣ + c", inv_exp,
+            OUT_DIR / "fig_10_exponential.png")
+
+# ── Method 11: Hill ───────────────────────────────────────────────────────────
+print("\n[11/11] Hill")
+
+def _hill(x, L, K, n, b):
+    return L * x ** n / (K ** n + x ** n) + b
+
+p0 = [float(medians[-1] - medians[0]), float(G / 2), 3.0, float(medians[0])]
+try:
+    popt_hil, _ = curve_fit(_hill, ranks, medians, p0=p0, maxfev=20000,
+                            bounds=([0, 1e-6, 1e-6, -np.inf],
+                                    [np.inf, np.inf, np.inf, np.inf]))
+    print(f"  L={popt_hil[0]:.3e}  K={popt_hil[1]:.4f}  n={popt_hil[2]:.4f}  b={popt_hil[3]:.3e}")
+except RuntimeError:
+    popt_hil = p0
+    print("  Warning: Hill fit did not converge, using initial guess")
+
+hil_fn = lambda x: _hill(x, *popt_hil)
+y0h, y1h = float(hil_fn(ranks[0])), float(hil_fn(ranks[-1]))
+inv_hil = make_brentq_inv(hil_fn, min(y0h, y1h), max(y0h, y1h))
+make_figure("Hill", hil_fn, "Hill function  y = L·xⁿ/(Kⁿ+xⁿ) + b", inv_hil,
+            OUT_DIR / "fig_11_hill.png")
+
+print(f"\n✓ All 11 figures saved to {OUT_DIR}")
